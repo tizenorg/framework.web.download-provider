@@ -146,9 +146,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 			if (info->file_size > 0) {
 				TRACE_INFO
 					("[FILE-SIZE][%d] [%lld]", request_id, info->file_size);
-				CLIENT_MUTEX_LOCK(&request->mutex);
 				request->file_size = info->file_size;
-				CLIENT_MUTEX_UNLOCK(&request->mutex);
 				if (dp_db_set_column
 						(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
 						DP_DB_COL_CONTENT_SIZE,
@@ -178,8 +176,6 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 				request_id);
 		}
 	}
-
-	CLIENT_MUTEX_LOCK(&request->mutex);
 
 	request->state = DP_STATE_DOWNLOADING;
 	if (dp_db_set_column(request->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
@@ -276,7 +272,6 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 
 	int request_id = request->id;
 	dp_credential cred = request->credential;
-	CLIENT_MUTEX_UNLOCK(&request->mutex);
 	dp_state_type state = DP_STATE_NONE;
 	dp_error_type errorcode = DP_ERROR_NONE;
 
@@ -335,7 +330,6 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 			errorcode = DP_ERROR_INVALID_DESTINATION;
 			state = DP_STATE_FAILED;
 		}
-		CLIENT_MUTEX_LOCK(&request->mutex);
 		if (request->file_size == 0) {
 			request->file_size = request->received_size;
 			if (dp_db_replace_column
@@ -344,7 +338,6 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 					DP_DB_COL_TYPE_INT64, &request->file_size ) < 0)
 				TRACE_ERROR("[ERROR][%d][SQL]", request_id);
 		}
-		CLIENT_MUTEX_UNLOCK(&request->mutex);
 	} else if (info->err == DA_RESULT_USER_CANCELED) {
 		state = DP_STATE_CANCELED;
 		errorcode = DP_ERROR_NONE;
@@ -367,9 +360,6 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 				&errorcode) < 0)
 			TRACE_ERROR("[ERROR][%d][SQL]", request_id);
 	}
-
-	// need MUTEX LOCK
-	CLIENT_MUTEX_LOCK(&request->mutex);
 
 	request->state = state;
 	request->error = errorcode;
@@ -425,14 +415,10 @@ static void __paused_cb(user_paused_info_t *info, void *user_data)
 	}
 
 	int request_id = request->id;
-	CLIENT_MUTEX_UNLOCK(&request->mutex);
 
 	if (dp_db_update_date
 			(request_id, DP_DB_TABLE_LOG, DP_DB_COL_ACCESS_TIME) < 0)
 		TRACE_ERROR("[ERROR][%d][SQL]", request_id);
-
-	// need MUTEX LOCK
-	CLIENT_MUTEX_LOCK(&request->mutex);
 
 	request->state = DP_STATE_PAUSED;
 
