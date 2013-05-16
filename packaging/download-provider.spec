@@ -5,7 +5,7 @@ Release:    9
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
 Source0:    %{name}-%{version}.tar.gz
-Source1:    download-provider.service
+
 Requires(post): /usr/bin/sqlite3
 Requires(post): sys-assert
 Requires(post): libdevice-node
@@ -29,6 +29,7 @@ BuildRequires:  pkgconfig(appsvc)
 BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(wifi-direct)
 BuildRequires:  gettext-devel
+BuildRequires:  pkgconfig(libsystemd-daemon)
 
 %description
 Description: download the contents in background
@@ -68,7 +69,7 @@ Description: download the contents in background (developement files)
 		-DDATABASE_FILE:PATH=%{_databasefile} \\\
 		-DDBUS_SERVICE_DIR:PATH=%{_dbusservicedir} \\\
 		-DLICENSE_DIR:PATH=%{_licensedir} \\\
-		-DSUPPORT_DBUS_SYSTEM:BOOL=ON \\\
+		-DSUPPORT_DBUS_SYSTEM:BOOL=OFF \\\
 		-DSUPPORT_WIFI_DIRECT:BOOL=OFF \\\
 		-DSUPPORT_LOG_MESSAGE:BOOL=ON \\\
 		-DSUPPORT_CHECK_IPC:BOOL=ON \\\
@@ -92,8 +93,9 @@ mkdir -p  %{buildroot}%{_sysconfdir}/rc.d/rc5.d
 ln -s %{_sysconfdir}/rc.d/init.d/download-provider-service  %{buildroot}%{_sysconfdir}/rc.d/rc5.d/S70download-provider-service
 
 mkdir -p %{buildroot}%{_libdir}/systemd/user/tizen-middleware.target.wants
-install %{SOURCE1} %{buildroot}%{_libdir}/systemd/user/
+mkdir -p %{buildroot}%{_libdir}/systemd/user/sockets.target.wants
 ln -s ../download-provider.service %{buildroot}%{_libdir}/systemd/user/tizen-middleware.target.wants/
+ln -s ../download-provider.socket %{buildroot}%{_libdir}/systemd/user/sockets.target.wants/
 
 mkdir -p %{buildroot}/opt/data/%{name}
 mkdir -p %{buildroot}%{_databasedir}
@@ -169,6 +171,8 @@ fi
 %{_libdir}/libdownloadagent2.so
 %{_libdir}/systemd/user/download-provider.service
 %{_libdir}/systemd/user/tizen-middleware.target.wants/download-provider.service
+%{_libdir}/systemd/user/download-provider.socket
+%{_libdir}/systemd/user/sockets.target.wants/download-provider.socket
 %{_libdir}/libdownload-provider-interface.so.%{version}
 %{_libdir}/libdownload-provider-interface.so.0
 %{_bindir}/%{name}

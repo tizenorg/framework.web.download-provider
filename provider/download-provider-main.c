@@ -22,6 +22,7 @@
 #include <pthread.h>
 #include <locale.h>
 #include <libintl.h>
+#include <systemd/sd-daemon.h>
 
 #ifdef DP_SUPPORT_DBUS_ACTIVATION
 #include <dbus/dbus.h>
@@ -172,10 +173,6 @@ int main(int argc, char **argv)
 				DP_LOCK_PID);
 		exit(EXIT_FAILURE);
 	}
-	// if exit socket file, delete it
-	if (access(DP_IPC, F_OK) == 0) {
-		unlink(DP_IPC);
-	}
 
 	g_type_init();
 
@@ -303,6 +300,8 @@ int main(int argc, char **argv)
 
 	g_idle_add(__dp_idle_start_service, privates);
 
+	sd_notify(0, "READY=1");
+
 	g_main_loop_run(g_main_loop_handle);
 
 DOWNLOAD_EXIT :
@@ -318,10 +317,9 @@ DOWNLOAD_EXIT :
 		if (privates->connection)
 			dp_network_connection_destroy(privates->connection);
 
-		if (privates->listen_fd >= 0) {
-			dp_socket_free(privates->listen_fd);
+		if (privates->listen_fd >= 0)
 			privates->listen_fd = -1;
-		}
+
 		if (g_dp_thread_queue_manager_pid > 0 &&
 				pthread_kill(g_dp_thread_queue_manager_pid, 0) != ESRCH) {
 			//pthread_cancel(g_dp_thread_queue_manager_pid);
@@ -340,10 +338,6 @@ DOWNLOAD_EXIT :
 	}
 	dp_db_close();
 
-	// if exit socket file, delete it
-	if (access(DP_IPC, F_OK) == 0) {
-		unlink(DP_IPC);
-	}
 	// delete pid file
 	if (access(DP_LOCK_PID, F_OK) == 0) {
 		close(lock_fd);

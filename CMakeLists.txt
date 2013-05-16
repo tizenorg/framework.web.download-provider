@@ -53,6 +53,9 @@ INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/download-provider.pc DESTINATION ${LIB
 
 INSTALL(PROGRAMS download-provider-service DESTINATION /etc/rc.d/init.d)
 
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/systemd/download-provider.service DESTINATION /usr/lib/systemd/user)
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/systemd/download-provider.socket DESTINATION /usr/lib/systemd/user)
+
 # install images
 INSTALL(DIRECTORY ${CMAKE_SOURCE_DIR}/res/images/ DESTINATION ${IMAGE_DIR}
 		FILES_MATCHING

@@ -20,7 +20,8 @@ pkg_check_modules(dp2_pkgs REQUIRED glib-2.0
 		appsvc
 		dbus-1
 		bundle
-		dlog)
+		dlog
+		libsystemd-daemon)
 
 FOREACH(flag ${dp2_pkgs_CFLAGS})
 	SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")

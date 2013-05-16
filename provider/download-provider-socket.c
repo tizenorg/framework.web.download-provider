@@ -26,7 +26,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
-
+#include <systemd/sd-daemon.h>
 #include <signal.h>
 
 #include "download-provider.h"
@@ -176,33 +176,46 @@ int dp_accept_socket_new()
 	int sockfd = -1;
 	struct sockaddr_un listenaddr;
 
-	if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-		TRACE_STRERROR("failed to create socket");
+	int n = sd_listen_fds(1);
+	if (n > 1) {
+		TRACE_STRERROR("too many file descriptors received");
 		return -1;
-	}
+	} else if (n == 1) {
+		int r;
+		if ((r = sd_is_socket_unix(SD_LISTEN_FDS_START, SOCK_STREAM, 1, DP_IPC, 0)) <= 0) {
+			TRACE_STRERROR("passed systemd file descriptor is of wrong type");
+			return -1;
+		}
+		sockfd = SD_LISTEN_FDS_START + 0;
+	} else {
+		if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+			TRACE_STRERROR("failed to create socket");
+			return -1;
+		}
 
-	bzero(&listenaddr, sizeof(listenaddr));
-	listenaddr.sun_family = AF_UNIX;
-	strcpy(listenaddr.sun_path, DP_IPC);
+		bzero(&listenaddr, sizeof(listenaddr));
+		listenaddr.sun_family = AF_UNIX;
+		strcpy(listenaddr.sun_path, DP_IPC);
 
-	if (bind(sockfd, (struct sockaddr *)&listenaddr, sizeof listenaddr) !=
-		0) {
-		TRACE_STRERROR("[CRITICAL] bind");
-		close(sockfd);
-		return -1;
-	}
+		if (bind(sockfd, (struct sockaddr *)&listenaddr, sizeof listenaddr) !=
+			0) {
+			TRACE_STRERROR("[CRITICAL] bind");
+			close(sockfd);
+			return -1;
+		}
 
-	if (chmod(listenaddr.sun_path, 0777) < 0) {
-		TRACE_STRERROR("[CRITICAL] chmod");
-		close(sockfd);
-		return -1;
-	}
+		if (chmod(listenaddr.sun_path, 0777) < 0) {
+			TRACE_STRERROR("[CRITICAL] chmod");
+			close(sockfd);
+			return -1;
+		}
 
-	// need 3 socket per a group
-	if (listen(sockfd, DP_MAX_GROUP * 3) != 0) {
-		TRACE_STRERROR("[CRITICAL] listen");
-		close(sockfd);
-		return -1;
+		// need 3 socket per a group
+		if (listen(sockfd, DP_MAX_GROUP * 3) != 0) {
+			TRACE_STRERROR("[CRITICAL] listen");
+			close(sockfd);
+			return -1;
+		}
 	}
 	return sockfd;
 }
