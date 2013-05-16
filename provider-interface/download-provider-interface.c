@@ -712,7 +712,8 @@ static void *__dp_interface_event_manager(void *arg)
 
 			if (eventinfo->state == DP_STATE_DOWNLOADING
 				&& eventinfo->received_size > 0) {
-				if (callback->progress != NULL) {
+				if (eventinfo->id == g_interface_slots[index].id &&
+					callback->progress != NULL) {
 					// progress event
 					TRACE_INFO("ID %d progress callback %p",
 						eventinfo->id, callback->progress );
@@ -721,7 +722,8 @@ static void *__dp_interface_event_manager(void *arg)
 						callback->progress_data);
 				}
 			} else {
-				if (callback->state != NULL) {
+				if (eventinfo->id == g_interface_slots[index].id &&
+					callback->state != NULL) {
 					// state event
 					TRACE_INFO("ID %d state callback %p", eventinfo->id,
 						callback->state);
