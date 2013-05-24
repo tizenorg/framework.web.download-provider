@@ -144,7 +144,7 @@ static int __cmp_string(char *s1, char *s2)
 	size_t s1_len = 0;
 	size_t s2_len = 0;
 
-	if (!s1 || !s2) {
+	if (s1 == NULL || s2 == NULL) {
 		TRACE_ERROR("[CHECK PARAM]");
 		return -1;
 	}
@@ -180,12 +180,13 @@ static int __get_empty_request_index(dp_request_slots *slots)
 {
 	int i = 0;
 
-	if (!slots)
+	if (slots == NULL)
 		return -1;
 
-	for (i = 0; i < DP_MAX_REQUEST; i++)
-		if (!slots[i].request)
+	for (i = 0; i < DP_MAX_REQUEST; i++) {
+		if (slots[i].request == NULL)
 			return i;
+	}
 	return -1;
 }
 
@@ -200,10 +201,9 @@ static int __get_same_request_index(dp_request_slots *slots, int id)
 		return -1;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
-		if (slots[i].request) {
-			if (slots[i].request->id == id) {
+		if (slots[i].request != NULL) {
+			if (slots[i].request->id == id)
 				return i;
-			}
 		}
 	}
 	return -1;
@@ -250,26 +250,28 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 	TRACE_INFO("");
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
-		if (privates->requests[i].request == NULL)
+
+		CLIENT_MUTEX_LOCK(&privates->requests[i].mutex);
+
+		if (privates->requests[i].request == NULL) {
+			CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 			continue;
-		if (privates->requests[i].request->group == NULL)
-			continue;
-		if (privates->requests[i].request->id <= 0)
-			continue;
-		if (privates->requests[i].request->group != group)
-			continue;
+		}
 
 		request = privates->requests[i].request;
 
-		CLIENT_MUTEX_LOCK(&request->mutex);
+		if (request->group == NULL || request->id <= 0 ||
+				request->group != group) {
+			CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
+			continue;
+		}
 
 		// if stopped, paused or not started yet, clear request
 		if (__is_started(request->state) < 0) {
 			TRACE_INFO("[FREE][%d] state[%s]", request->id,
 				dp_print_state(request->state));
-			CLIENT_MUTEX_UNLOCK(&request->mutex);
-			dp_request_free(request);
-			privates->requests[i].request = NULL;
+			CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
+			dp_request_slot_free(&privates->requests[i]);
 			continue;
 		}
 
@@ -306,16 +308,15 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 					if (dp_cancel_agent_download(request->agent_id) < 0)
 						TRACE_INFO("[fail][%d]cancel_agent", request->id);
 				}
-				CLIENT_MUTEX_UNLOCK(&request->mutex);
-				dp_request_free(request);
-				privates->requests[i].request = NULL;
+				CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
+				dp_request_slot_free(&privates->requests[i]);
 				continue;
 			} else {
 				TRACE_ERROR("[fail][%d][sql] set state:%s", request->id,
 					dp_print_state(state));
 			}
 		}
-		CLIENT_MUTEX_UNLOCK(&request->mutex);
+		CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 
 	}
 	// clear this group
@@ -727,6 +728,635 @@ static int __dp_set_group_event_sock(int clientfd,
 	return 0;
 }
 
+static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *request)
+{
+	unsigned is_checked = 1;
+	dp_error_type errorcode = DP_ERROR_NONE;
+
+	char *read_str = NULL;
+	// No read(), write a string
+	switch(cmd->cmd) {
+	case DP_CMD_GET_URL:
+		read_str = dp_request_get_url(cmd->id, &errorcode);
+		break;
+	case DP_CMD_GET_DESTINATION:
+		read_str = dp_request_get_destination(cmd->id, request, &errorcode);
+		break;
+	case DP_CMD_GET_FILENAME:
+		read_str = dp_request_get_filename(cmd->id, request, &errorcode);
+		break;
+	case DP_CMD_GET_SAVED_PATH:
+		read_str = dp_request_get_savedpath(cmd->id, request, &errorcode);
+		break;
+	case DP_CMD_GET_TEMP_SAVED_PATH:
+		read_str = dp_request_get_tmpsavedpath(cmd->id, request, &errorcode);
+		break;
+	case DP_CMD_GET_MIME_TYPE:
+		read_str = dp_request_get_mimetype(cmd->id, request, &errorcode);
+		break;
+	case DP_CMD_GET_CONTENT_NAME:
+		read_str = dp_request_get_contentname(cmd->id, request, &errorcode);
+		break;
+	case DP_CMD_GET_ETAG:
+		read_str = dp_request_get_etag(cmd->id, request, &errorcode);
+		break;
+	default:
+		is_checked = 0;
+		break;
+	}
+	if (is_checked == 1) {
+		if (read_str == NULL || strlen(read_str) < 1)
+			errorcode = DP_ERROR_NO_DATA;
+		dp_ipc_send_errorcode(sock, errorcode);
+		if (errorcode == DP_ERROR_NONE) {
+			dp_ipc_send_string(sock, read_str);
+		} else {
+			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
+				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
+		}
+		free(read_str);
+		return errorcode;
+	}
+
+	// No read(), write a integer variable
+	int read_int = 0;
+	errorcode = DP_ERROR_NONE;
+	is_checked = 1;
+	switch(cmd->cmd) {
+	case DP_CMD_GET_NOTIFICATION:
+		read_int = dp_db_get_int_column(cmd->id, DP_DB_TABLE_REQUEST_INFO,
+						DP_DB_COL_NOTIFICATION_ENABLE);
+		break;
+	case DP_CMD_GET_AUTO_DOWNLOAD:
+		read_int = dp_db_get_int_column(cmd->id, DP_DB_TABLE_REQUEST_INFO,
+						DP_DB_COL_AUTO_DOWNLOAD);
+		break;
+	case DP_CMD_GET_NETWORK_TYPE:
+		read_int = dp_db_get_int_column(cmd->id, DP_DB_TABLE_REQUEST_INFO,
+						DP_DB_COL_NETWORK_TYPE);
+		break;
+	case DP_CMD_GET_HTTP_STATUS:
+		read_int = dp_db_get_int_column(cmd->id, DP_DB_TABLE_DOWNLOAD_INFO,
+						DP_DB_COL_HTTP_STATUS);
+		break;
+	case DP_CMD_GET_STATE:
+		if (request == NULL) {
+			read_int = dp_db_get_int_column(cmd->id,
+					DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		} else {
+			read_int = request->state;
+		}
+		break;
+	case DP_CMD_GET_ERROR:
+		if (request == NULL) {
+			read_int = dp_db_get_int_column(cmd->id,
+					DP_DB_TABLE_LOG, DP_DB_COL_ERRORCODE);
+		} else {
+			read_int = request->error;
+		}
+		break;
+	default:
+		is_checked = 0;
+		break;
+	}
+	if (is_checked == 1) {
+		if (read_int < 0)
+			errorcode = DP_ERROR_NO_DATA;
+		dp_ipc_send_errorcode(sock, errorcode);
+		if (errorcode == DP_ERROR_NONE) {
+			dp_ipc_send_custom_type(sock, &read_int, sizeof(int));
+		} else {
+			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
+				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
+		}
+		return errorcode;
+	}
+
+	// No read(), write a long long variable
+	unsigned long long recv_long = 0;
+	errorcode = DP_ERROR_NONE;
+	is_checked = 1;
+	switch(cmd->cmd) {
+	case DP_CMD_GET_RECEIVED_SIZE:
+		if (request == NULL)
+			errorcode = DP_ERROR_NO_DATA;
+		else
+			recv_long = request->received_size;
+		break;
+	case DP_CMD_GET_TOTAL_FILE_SIZE:
+		if (request != NULL) {
+			recv_long = request->file_size;
+		} else {
+			long long file_size =
+				dp_db_get_int64_column(cmd->id,
+					DP_DB_TABLE_DOWNLOAD_INFO, DP_DB_COL_CONTENT_SIZE);
+			if (file_size < 0)
+				errorcode = DP_ERROR_NO_DATA;
+			else // casting
+				recv_long = file_size;
+		}
+		break;
+	default:
+		is_checked = 0;
+		break;
+	}
+	if (is_checked == 1) {
+		dp_ipc_send_errorcode(sock, errorcode);
+		if (errorcode == DP_ERROR_NONE) {
+			dp_ipc_send_custom_type(sock, &recv_long,
+				sizeof(unsigned long long));
+		} else {
+			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
+				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
+		}
+		return errorcode;
+	}
+
+	// complex read() and write().
+	char *read_str2 = NULL;
+	errorcode = DP_ERROR_NONE;
+	read_str = NULL;
+	is_checked = 1;
+	switch(cmd->cmd) {
+	case DP_CMD_GET_HTTP_HEADER:
+		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		read_str2 = dp_db_cond_get_text_column(cmd->id,
+			DP_DB_TABLE_HTTP_HEADERS, DP_DB_COL_HEADER_DATA,
+			DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT, read_str);
+		if (read_str2 == NULL)
+			errorcode = DP_ERROR_NO_DATA;
+		dp_ipc_send_errorcode(sock, errorcode);
+		if (errorcode == DP_ERROR_NONE)
+			dp_ipc_send_string(sock, read_str2);
+		break;
+	case DP_CMD_GET_HTTP_HEADER_LIST:
+	{
+		char **values = NULL;
+		unsigned rows_count = 0;
+		errorcode = __dp_get_http_header_fields(sock,
+				cmd->id, &values, &rows_count);
+		if (errorcode == DP_ERROR_NONE) {
+			__send_return_custom_type(sock, DP_ERROR_NONE,
+				&rows_count, sizeof(int));
+			// sending strings
+			int i = 0;
+			for (i = 0; i < rows_count; i++) {
+				if (dp_ipc_send_string(sock, values[i]) < 0)
+					break;
+			}
+			for (i = 0; i < rows_count; i++)
+				free(values[i]);
+		} else {
+			if (errorcode != DP_ERROR_IO_ERROR)
+				dp_ipc_send_errorcode(sock, errorcode);
+		}
+		free(values);
+		break;
+	}
+	case DP_CMD_GET_EXTRA_PARAM:
+	{
+		char **values = NULL;
+		unsigned rows_count = 0;
+		errorcode = __dp_get_extra_param_values(sock,
+				cmd->id, &values, &rows_count);
+		if (errorcode == DP_ERROR_NONE) {
+			__send_return_custom_type(sock, DP_ERROR_NONE,
+				&rows_count, sizeof(int));
+			// sending strings
+			int i = 0;
+			for (i = 0; i < rows_count; i++) {
+				if (dp_ipc_send_string(sock, values[i]) < 0)
+					break;
+			}
+		for (i = 0; i < rows_count; i++)
+				free(values[i]);
+		} else {
+			if (errorcode != DP_ERROR_IO_ERROR)
+				dp_ipc_send_errorcode(sock, errorcode);
+		}
+		free(values);
+		break;
+	}
+	default:
+		is_checked = 0;
+		break;
+	}
+	if (is_checked == 1) {
+		if (errorcode != DP_ERROR_NONE) {
+			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
+				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
+		}
+		free(read_str);
+		free(read_str2);
+		return errorcode;
+	}
+	return DP_ERROR_UNKNOWN;
+}
+
+static dp_error_type __dp_do_set_command(int sock, dp_command* cmd, dp_request *request)
+{
+	unsigned is_checked = 1;
+	int read_int = 0;
+	dp_error_type errorcode = DP_ERROR_NONE;
+	char *read_str = NULL;
+
+
+	// read a interger or a string, return errorcode.
+	errorcode = DP_ERROR_NONE;
+	switch(cmd->cmd) {
+	case DP_CMD_SET_STATE_CALLBACK:
+		if (dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_state_event(cmd->id, request, read_int);
+		break;
+	case DP_CMD_SET_PROGRESS_CALLBACK:
+		if (dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_progress_event(cmd->id, request, read_int);
+		break;
+	case DP_CMD_SET_NETWORK_TYPE:
+		if (dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_network_type(cmd->id, request, read_int);
+		break;
+	case DP_CMD_SET_AUTO_DOWNLOAD:
+		if (dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_auto_download(cmd->id, request, read_int);
+		break;
+	case DP_CMD_SET_NOTIFICATION:
+		if (dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_notification(cmd->id, request, read_int);
+		break;
+	case DP_CMD_SET_URL:
+		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_url(cmd->id, request, read_str);
+		break;
+	case DP_CMD_SET_DESTINATION:
+		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_destination(cmd->id, request, read_str);
+		break;
+	case DP_CMD_SET_FILENAME:
+		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_filename(cmd->id, request, read_str);
+		break;
+	default:
+		is_checked = 0;
+		break;
+	}
+	if (is_checked == 1) {
+		free(read_str);
+		if (errorcode != DP_ERROR_NONE) {
+			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
+				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
+		}
+		if (errorcode == DP_ERROR_IO_ERROR)
+			return errorcode;
+		dp_ipc_send_errorcode(sock, errorcode);
+		return errorcode;
+	}
+
+	// complex read() and write().
+	char *read_str2 = NULL;
+	errorcode = DP_ERROR_NONE;
+	read_str = NULL;
+	is_checked = 1;
+	switch(cmd->cmd) {
+	case DP_CMD_SET_HTTP_HEADER:
+	{
+		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		read_str2 = dp_ipc_read_string(sock);
+		if (read_str2 == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		int conds_count = 3; // id + field + data
+		db_conds_list_fmt conds_p[conds_count];
+		memset(&conds_p, 0x00,
+		conds_count * sizeof(db_conds_list_fmt));
+		conds_p[0].column = DP_DB_COL_ID;
+		conds_p[0].type = DP_DB_COL_TYPE_INT;
+		conds_p[0].value = &cmd->id;
+		conds_p[1].column = DP_DB_COL_HEADER_FIELD;
+		conds_p[1].type = DP_DB_COL_TYPE_TEXT;
+		conds_p[1].value = read_str;
+		conds_p[2].column = DP_DB_COL_HEADER_DATA;
+		conds_p[2].type = DP_DB_COL_TYPE_TEXT;
+		conds_p[2].value = read_str2;
+		if (dp_db_get_conds_rows_count(DP_DB_TABLE_HTTP_HEADERS,
+				DP_DB_COL_ID, "AND", 2, conds_p) <= 0) { // insert
+			if (dp_db_insert_columns(DP_DB_TABLE_HTTP_HEADERS,
+					conds_count, conds_p) < 0)
+				errorcode = DP_ERROR_OUT_OF_MEMORY;
+		} else { // update data by field
+			if (dp_db_cond_set_column(cmd->id, DP_DB_TABLE_HTTP_HEADERS,
+					DP_DB_COL_HEADER_DATA, DP_DB_COL_TYPE_TEXT, read_str2,
+					DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT, read_str) < 0)
+				errorcode = DP_ERROR_OUT_OF_MEMORY;
+		}
+		dp_ipc_send_errorcode(sock, errorcode);
+		break;
+	}
+	case DP_CMD_DEL_HTTP_HEADER:
+		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		if (dp_db_get_cond_rows_count(cmd->id, DP_DB_TABLE_HTTP_HEADERS,
+				DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT,
+				read_str) < 0) {
+			errorcode = DP_ERROR_NO_DATA;
+		} else {
+			if (dp_db_cond_remove(cmd->id, DP_DB_TABLE_HTTP_HEADERS,
+					DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT, read_str) < 0)
+				errorcode = DP_ERROR_OUT_OF_MEMORY;
+		}
+		dp_ipc_send_errorcode(sock, errorcode);
+		break;
+	case DP_CMD_ADD_EXTRA_PARAM:
+		errorcode = __dp_add_extra_param(sock, cmd->id);
+		if (errorcode != DP_ERROR_IO_ERROR)
+			dp_ipc_send_errorcode(sock, errorcode);
+		break;
+	case DP_CMD_REMOVE_EXTRA_PARAM:
+		errorcode = __dp_remove_extra_param(sock, cmd->id);
+		if (errorcode != DP_ERROR_IO_ERROR)
+			dp_ipc_send_errorcode(sock, errorcode);
+		break;
+	default:
+		is_checked = 0;
+		break;
+	}
+	if (is_checked == 1) {
+		if (errorcode != DP_ERROR_NONE) {
+			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
+				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
+		}
+		free(read_str);
+		free(read_str2);
+		return errorcode;
+	}
+	return DP_ERROR_UNKNOWN;
+}
+
+static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_request_slots *request_slot)
+{
+	unsigned is_checked = 1;
+	int read_int = 0;
+	dp_error_type errorcode = DP_ERROR_NONE;
+
+	read_int = 0;
+	errorcode = DP_ERROR_NONE;
+	is_checked = 1;
+	switch(cmd->cmd) {
+	case DP_CMD_DESTROY:
+		if (request_slot != NULL) {
+			CLIENT_MUTEX_LOCK(&request_slot->mutex);
+			if (request_slot->request == NULL) {// just update the state
+				if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
+						DP_DB_COL_TYPE_INT, &read_int) < 0)
+					errorcode = DP_ERROR_OUT_OF_MEMORY;
+			} else { // call cancel in some cases
+				if (__is_started(request_slot->request->state) == 0) {
+					read_int = DP_STATE_CANCELED;
+					if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
+						DP_DB_COL_TYPE_INT, &read_int) < 0) {
+						errorcode = DP_ERROR_OUT_OF_MEMORY;
+					} else {
+						if (__dp_call_cancel_agent(request_slot->request) < 0)
+							TRACE_INFO("[fail][%d]cancel_agent", cmd->id);
+						request_slot->request->state = DP_STATE_CANCELED;
+					}
+				}
+			}
+			CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+		}
+		break;
+	case DP_CMD_FREE:
+		// [destory]-[return]-[free]
+		// No return errorcode
+		dp_request_slot_free(request_slot);
+		break;
+	case DP_CMD_PAUSE:
+	{
+		// to check fastly, divide the case by request value
+		if (request_slot == NULL) {
+			dp_state_type state = dp_db_get_int_column(cmd->id,
+					DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+			// already paused or stopped
+			if (state > DP_STATE_DOWNLOADING) {
+				errorcode = DP_ERROR_INVALID_STATE;
+			} else {
+				// change state to paused.
+				state = DP_STATE_PAUSED;
+				if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG,
+						DP_DB_COL_STATE, DP_DB_COL_TYPE_INT, &state) < 0)
+					errorcode = DP_ERROR_OUT_OF_MEMORY;
+			}
+			break;
+		}
+
+		CLIENT_MUTEX_LOCK(&request_slot->mutex);
+
+		if (request_slot->request->state > DP_STATE_DOWNLOADING) {
+			errorcode = DP_ERROR_INVALID_STATE;
+			CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+			break;
+		}
+
+		// before downloading including QUEUED
+		if (__is_downloading(request_slot->request->state) < 0) {
+			dp_state_type state = DP_STATE_PAUSED;
+			if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
+					DP_DB_COL_TYPE_INT, &state) < 0) {
+				errorcode = DP_ERROR_OUT_OF_MEMORY;
+			} else {
+				request_slot->request->state = state;
+			}
+			CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+			break;
+		}
+		// only downloading.
+		dp_state_type state = DP_STATE_PAUSE_REQUESTED;
+		if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG,
+				DP_DB_COL_STATE, DP_DB_COL_TYPE_INT, &state) < 0) {
+			errorcode = DP_ERROR_OUT_OF_MEMORY;
+		} else {
+			TRACE_INFO("[%s][%d]pause_agent(%d) state:%s",
+				__print_command(cmd->cmd), cmd->id,
+				request_slot->request->agent_id,
+				dp_print_state(request_slot->request->state));
+			if (dp_pause_agent_download
+					(request_slot->request->agent_id) < 0) {
+				TRACE_INFO("[fail][%d]pause_agent(%d)",
+					cmd->id, request_slot->request->agent_id);
+			}
+			request_slot->request->state = state;
+			request_slot->request->error = DP_ERROR_NONE;
+			request_slot->request->pause_time = (int)time(NULL);
+			dp_db_update_date(cmd->id, DP_DB_TABLE_LOG,
+				DP_DB_COL_ACCESS_TIME);
+		}
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+		break;
+	}
+	case DP_CMD_CANCEL:
+	{
+		// to check fastly, divide the case by request value
+		if (request_slot == NULL) {
+			dp_state_type state = dp_db_get_int_column(cmd->id,
+					DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+			// already paused or stopped
+			if (__is_stopped(state) == 0) {
+				errorcode = DP_ERROR_INVALID_STATE;
+			} else {
+				// change state to canceled.
+				state = DP_STATE_CANCELED;
+				if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG,
+						DP_DB_COL_STATE, DP_DB_COL_TYPE_INT, &state) < 0)
+					errorcode = DP_ERROR_OUT_OF_MEMORY;
+			}
+			break;
+		}
+
+		CLIENT_MUTEX_LOCK(&request_slot->mutex);
+
+		if (__is_stopped(request_slot->request->state) == 0) {
+			errorcode = DP_ERROR_INVALID_STATE;
+		} else {
+			// change state to canceled.
+			dp_state_type state = DP_STATE_CANCELED;
+			if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
+					DP_DB_COL_TYPE_INT, &state) < 0)
+				errorcode = DP_ERROR_OUT_OF_MEMORY;
+		}
+		if (errorcode == DP_ERROR_NONE) {
+			TRACE_INFO("[%s][%d]cancel_agent(%d) state:%s",
+				__print_command(cmd->cmd), cmd->id,
+				request_slot->request->agent_id,
+				dp_print_state(request_slot->request->state));
+			if (__dp_call_cancel_agent(request_slot->request) < 0)
+				TRACE_INFO("[fail][%d]cancel_agent", cmd->id);
+			request_slot->request->state = DP_STATE_CANCELED;
+		}
+		dp_db_update_date(cmd->id, DP_DB_TABLE_LOG, DP_DB_COL_ACCESS_TIME);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+		break;
+	}
+	default:
+		is_checked = 0;
+		break;
+	}
+	if (is_checked == 1) {
+		if (errorcode != DP_ERROR_NONE) {
+			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
+				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
+		}
+		if (cmd->cmd != DP_CMD_FREE) // free no return
+			dp_ipc_send_errorcode(sock, errorcode);
+		return errorcode;
+	}
+	return DP_ERROR_UNKNOWN;
+}
+
+static dp_error_type __do_dp_start_command(int sock, int id, dp_privates *privates,
+	dp_client_group *group, dp_request_slots *request_slot)
+{
+	dp_error_type errorcode = DP_ERROR_NONE;
+
+	// need URL at least
+	char *url = dp_request_get_url(id, &errorcode);
+	if (url == NULL)
+		errorcode = DP_ERROR_INVALID_URL;
+	free(url);
+	if (errorcode != DP_ERROR_NONE)
+		return errorcode;
+
+	if (request_slot == NULL) { // Support Re-download
+		int index = __get_empty_request_index(privates->requests);
+		if (index < 0) { // Busy, No Space in slot
+			return DP_ERROR_QUEUE_FULL;
+		} else {
+			CLIENT_MUTEX_LOCK(&privates->requests[index].mutex);
+			dp_request *request =
+				dp_request_load_from_log (id, &errorcode);
+			if (request != NULL) {
+				// restore callback info
+				request->state_cb = dp_db_get_int_column(id,
+						DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_STATE_EVENT);
+				request->progress_cb = dp_db_get_int_column(id,
+						DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_PROGRESS_EVENT);
+				privates->requests[index].request = request;
+				request_slot = &privates->requests[index];
+			} else {
+				CLIENT_MUTEX_UNLOCK(&privates->requests[index].mutex);
+				return errorcode;
+			}
+		}
+	} else {
+		CLIENT_MUTEX_LOCK(&request_slot->mutex);
+		if (__is_started(request_slot->request->state) == 0 ||
+				request_slot->request->state == DP_STATE_COMPLETED)
+			errorcode = DP_ERROR_INVALID_STATE;
+	}
+	if (errorcode != DP_ERROR_NONE) { // check is_started
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+		return errorcode;
+	}
+
+	dp_state_type state = DP_STATE_QUEUED;
+	if (dp_db_set_column(id, DP_DB_TABLE_LOG,
+			DP_DB_COL_STATE, DP_DB_COL_TYPE_INT, &state) < 0) {
+		errorcode = DP_ERROR_OUT_OF_MEMORY;
+	} else {
+		if (group != NULL)
+			group->queued_count++;
+		request_slot->request->start_time = (int)time(NULL);
+		request_slot->request->pause_time = 0;
+		request_slot->request->stop_time = 0;
+		request_slot->request->state = state;
+		request_slot->request->error = DP_ERROR_NONE;
+		dp_db_update_date(id, DP_DB_TABLE_LOG, DP_DB_COL_ACCESS_TIME);
+	}
+
+	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+
+	if (errorcode != DP_ERROR_NONE) {
+		TRACE_ERROR("[ERROR][%d][START][%s]", id, dp_print_errorcode(errorcode));
+	} else {
+		 dp_ipc_send_errorcode(sock, errorcode);
+		//send signal to queue thread
+		dp_thread_queue_manager_wake_up();
+	}
+	return errorcode;
+}
+
 // in url-download, make 3 connection before send CREATE command.
 // after accepting, fill info to pacakgelist.
 // 3 socket per 1 package ( info/request/progress )
@@ -891,12 +1521,7 @@ void *dp_thread_requests_manager(void *arg)
 					continue;
 				}
 
-				// print detail info
-				TRACE_INFO("[%s] id:%d sock:%d pkg:%s pid:%d slot:%d",
-					__print_command(command.cmd), command.id, sock,
-					group->pkgname, group->credential.pid, i);
-
-				if (command.cmd == 0) { // Client meet some Error.
+				if (command.cmd == 0 || command.cmd >= DP_CMD_LAST_SECT) { // Client meet some Error.
 					TRACE_INFO("[Closed Peer] pkg:%s sock:%d slot:%d",
 						group->pkgname, sock, i);
 					// check all request included to this group
@@ -921,6 +1546,9 @@ void *dp_thread_requests_manager(void *arg)
 				}
 
 				if (command.cmd == DP_CMD_CREATE) {
+					TRACE_INFO("[CREATE] id:%d sock:%d pid:%d gindex:%d pkg:%s",
+						command.id, sock,
+						group->credential.pid, i, group->pkgname);
 					// search empty slot in privates->requests
 					index =
 						__get_empty_request_index(privates->requests);
@@ -930,6 +1558,7 @@ void *dp_thread_requests_manager(void *arg)
 						dp_ipc_send_errorcode(sock, DP_ERROR_QUEUE_FULL);
 					} else {
 						errorcode = DP_ERROR_NONE;
+						CLIENT_MUTEX_LOCK(&privates->requests[index].mutex);
 						errorcode = dp_request_create(command.id, group,
 							&privates->requests[index].request);
 						dp_ipc_send_errorcode(sock, errorcode);
@@ -944,6 +1573,7 @@ void *dp_thread_requests_manager(void *arg)
 							TRACE_ERROR("[ERROR][%s]",
 								dp_print_errorcode(errorcode));
 						}
+						CLIENT_MUTEX_UNLOCK(&privates->requests[index].mutex);
 					}
 					continue;
 				}
@@ -965,718 +1595,111 @@ void *dp_thread_requests_manager(void *arg)
 				index = __get_same_request_index(privates->requests,
 						command.id);
 
-				// GET API works even if request is NULL.
-				dp_request *request = NULL;
-				if (index >= 0)
-					request = privates->requests[index].request;
+				dp_request_slots *request_slot = NULL;
+				unsigned is_loaded = 0;
+				errorcode = DP_ERROR_NONE;
 
-				// check for all command.
-				if (request == NULL) {
+				if (index >= 0) {
+					CLIENT_MUTEX_LOCK(&privates->requests[index].mutex);
+					if (privates->requests[index].request != NULL)
+						is_loaded = 1;
+					else
+						CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+				}
+
+				errorcode = DP_ERROR_UNKNOWN; // check matched command
+
+				// divide on memory or from DB
+				if (is_loaded == 1 && index >= 0) { // already locked
+
+					TRACE_INFO("[%s] id:%d sock:%d pid:%d gindex:%d slot:%d pkg:%s",
+						__print_command(command.cmd), command.id, sock,
+						group->credential.pid, i, index, group->pkgname);
+
+					request_slot = &privates->requests[index];
+
+					// auth by pkgname
+					if (__cmp_string(group->pkgname, request_slot->request->packagename) < 0) {
+						TRACE_ERROR("[ERROR][%d] Auth [%s]/[%s]",
+							command.id, group->pkgname, request_slot->request->packagename);
+						TRACE_ERROR("[ERROR][%d][INVALID_PARAMETER]", command.id);
+						dp_ipc_send_errorcode(sock, DP_ERROR_INVALID_PARAMETER);
+						CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+						continue;
+					}
+
+					// if no group, update group.
+					if (request_slot->request->group == NULL)
+						request_slot->request->group = group;
+
+					if (command.cmd > DP_CMD_SET_SECT) {
+						errorcode = __dp_do_set_command(sock, &command, request_slot->request);
+						CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+					} else if (command.cmd > DP_CMD_GET_SECT) {
+						errorcode = __dp_do_get_command(sock, &command, request_slot->request);
+						CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+					} else {
+						CLIENT_MUTEX_UNLOCK(&request_slot->mutex); // locking again in inner function
+						if (command.cmd > DP_CMD_ACTION_SECT)
+							errorcode = __dp_do_action_command(sock, &command, request_slot);
+						else if (command.cmd == DP_CMD_START)
+							errorcode = __do_dp_start_command(sock, command.id, privates, group, request_slot);
+					}
+
+				} else { // not found on the slots
+
+					TRACE_INFO("[%s] id:%d sock:%d pid:%d gindex:%d slot:no pkg:%s",
+						__print_command(command.cmd), command.id, sock,
+						group->credential.pid, i, group->pkgname);
+
 					int check_id = dp_db_get_int_column(command.id,
 							DP_DB_TABLE_LOG, DP_DB_COL_ID);
 					if (check_id < 0 || check_id != command.id) {
 						errorcode = DP_ERROR_ID_NOT_FOUND;
-						TRACE_ERROR("[ERROR][%d][%s]", command.id,
-							dp_print_errorcode(errorcode));
-						dp_ipc_send_errorcode(sock, errorcode);
+						TRACE_ERROR("[ERROR][%d][ID_NOT_FOUND]", command.id);
+						dp_ipc_send_errorcode(sock, DP_ERROR_ID_NOT_FOUND);
 						continue;
 					}
-				}
-
-				// Authentication by packagename.
-				char *auth_pkgname = NULL;
-				errorcode = DP_ERROR_NONE;
-				if (request != NULL) {
-					auth_pkgname = dp_strdup(request->packagename);
-					if (auth_pkgname == NULL)
-						errorcode = DP_ERROR_OUT_OF_MEMORY;
-				} else {
-					auth_pkgname = dp_db_get_text_column(command.id,
+					// auth by pkgname
+					char *auth_pkgname = dp_db_get_text_column(command.id,
 							DP_DB_TABLE_LOG, DP_DB_COL_PACKAGENAME);
-					if (auth_pkgname == NULL)
-						errorcode = DP_ERROR_ID_NOT_FOUND;
-				}
-				if (errorcode == DP_ERROR_NONE) {
+					if (auth_pkgname == NULL) {
+						TRACE_ERROR("[ERROR][%d][ID_NOT_FOUND]", command.id);
+						dp_ipc_send_errorcode(sock, DP_ERROR_ID_NOT_FOUND);
+						continue;
+					}
 					// auth by pkgname
 					if (__cmp_string(group->pkgname, auth_pkgname) < 0) {
 						TRACE_ERROR("[ERROR][%d] Auth [%s]/[%s]",
 							command.id, group->pkgname, auth_pkgname);
-						errorcode = DP_ERROR_INVALID_PARAMETER;
-					}
-				}
-				free(auth_pkgname);
-				if (errorcode != DP_ERROR_NONE) {
-					TRACE_ERROR("[ERROR][%d][%s]", command.id,
-							dp_print_errorcode(errorcode));
-					dp_ipc_send_errorcode(sock, errorcode);
-					continue;
-				}
-
-				// if no group, update group.
-				if (request != NULL && request->group == NULL)
-					request->group = group;
-
-				unsigned is_checked = 1;
-				int read_int = 0;
-				char *read_str = NULL;
-
-				// read a interger or a string, return errorcode.
-				errorcode = DP_ERROR_NONE;
-				switch(command.cmd) {
-				case DP_CMD_SET_STATE_CALLBACK:
-					if (dp_ipc_read_custom_type(sock, &read_int,
-							sizeof(int)) < 0) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					errorcode = dp_request_set_state_event(command.id,
-							request, read_int);
-					break;
-				case DP_CMD_SET_PROGRESS_CALLBACK:
-					if (dp_ipc_read_custom_type(sock, &read_int,
-							sizeof(int)) < 0) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					errorcode = dp_request_set_progress_event
-							(command.id, request, read_int);
-					break;
-				case DP_CMD_SET_NETWORK_TYPE:
-					if (dp_ipc_read_custom_type(sock, &read_int,
-							sizeof(int)) < 0) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					errorcode = dp_request_set_network_type(command.id,
-							request, read_int);
-					break;
-				case DP_CMD_SET_AUTO_DOWNLOAD:
-					if (dp_ipc_read_custom_type(sock, &read_int,
-							sizeof(int)) < 0) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					errorcode = dp_request_set_auto_download(command.id,
-							request, read_int);
-					break;
-				case DP_CMD_SET_NOTIFICATION:
-					if (dp_ipc_read_custom_type(sock, &read_int,
-							sizeof(int)) < 0) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					errorcode = dp_request_set_notification(command.id,
-							request, read_int);
-					break;
-				case DP_CMD_SET_URL:
-					if ((read_str = dp_ipc_read_string(sock)) == NULL) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					errorcode = dp_request_set_url(command.id, request,
-							read_str);
-					break;
-				case DP_CMD_SET_DESTINATION:
-					if ((read_str = dp_ipc_read_string(sock)) == NULL) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					errorcode = dp_request_set_destination(command.id,
-							request, read_str);
-					break;
-				case DP_CMD_SET_FILENAME:
-					if ((read_str = dp_ipc_read_string(sock)) == NULL) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					errorcode = dp_request_set_filename(command.id,
-							request, read_str);
-					break;
-				default:
-					is_checked = 0;
-					break;
-				}
-				if (is_checked == 1) {
-					free(read_str);
-					if (errorcode != DP_ERROR_NONE) {
-						TRACE_ERROR("[ERROR][%d][%s][%s]", command.id,
-							__print_command(command.cmd),
-							dp_print_errorcode(errorcode));
-					}
-					if (errorcode == DP_ERROR_IO_ERROR) {
-						FD_CLR(sock, &listen_fdset);
-						__clear_group(privates, group);
-						privates->groups[i].group = NULL;
+						TRACE_ERROR("[ERROR][%d][INVALID_PARAMETER]", command.id);
+						dp_ipc_send_errorcode(sock, DP_ERROR_INVALID_PARAMETER);
+						free(auth_pkgname);
 						continue;
 					}
-					dp_ipc_send_errorcode(sock, errorcode);
+					free(auth_pkgname);
+
+					if (command.cmd > DP_CMD_SET_SECT)
+						errorcode = __dp_do_set_command(sock, &command, NULL);
+					else if (command.cmd > DP_CMD_GET_SECT)
+						errorcode = __dp_do_get_command(sock, &command, NULL);
+					else if (command.cmd > DP_CMD_ACTION_SECT)
+						errorcode = __dp_do_action_command(sock, &command, request_slot);
+					else if (command.cmd == DP_CMD_START)
+						errorcode = __do_dp_start_command(sock, command.id, privates, group, request_slot);
+
+				}
+
+				if (errorcode == DP_ERROR_IO_ERROR) {
+					TRACE_ERROR("[IO_ERROR][%d] slot:%d pid:%d",
+						command.id, i,
+						privates->groups[i].group->credential.pid);
+					FD_CLR(sock, &listen_fdset);
+					__clear_group(privates, group);
+					privates->groups[i].group = NULL;
 					continue;
 				}
-
-				// No read(), write a string
-				read_str = NULL;
-				errorcode = DP_ERROR_NONE;
-				is_checked = 1;
-				switch(command.cmd) {
-				case DP_CMD_GET_URL:
-					read_str = dp_request_get_url(command.id, request,
-							&errorcode);
-					break;
-				case DP_CMD_GET_DESTINATION:
-					read_str = dp_request_get_destination(command.id,
-							request, &errorcode);
-					break;
-				case DP_CMD_GET_FILENAME:
-					read_str = dp_request_get_filename(command.id,
-							request, &errorcode);
-					break;
-				case DP_CMD_GET_SAVED_PATH:
-					read_str = dp_request_get_savedpath(command.id,
-							request, &errorcode);
-					break;
-				case DP_CMD_GET_TEMP_SAVED_PATH:
-					read_str = dp_request_get_tmpsavedpath(command.id,
-							request, &errorcode);
-					break;
-				case DP_CMD_GET_MIME_TYPE:
-					read_str = dp_request_get_mimetype(command.id,
-							request, &errorcode);
-					break;
-				case DP_CMD_GET_CONTENT_NAME:
-					read_str = dp_request_get_contentname(command.id,
-							request, &errorcode);
-					break;
-				case DP_CMD_GET_ETAG:
-					read_str = dp_request_get_etag(command.id, request,
-							&errorcode);
-					break;
-				default:
-					is_checked = 0;
-					break;
-				}
-				if (is_checked == 1) {
-					if (read_str == NULL || strlen(read_str) < 1)
-						errorcode = DP_ERROR_NO_DATA;
-					dp_ipc_send_errorcode(sock, errorcode);
-					if (errorcode == DP_ERROR_NONE) {
-						dp_ipc_send_string(sock, read_str);
-					} else {
-						TRACE_ERROR("[ERROR][%d][%s][%s]", command.id,
-							__print_command(command.cmd),
-							dp_print_errorcode(errorcode));
-					}
-					free(read_str);
-					continue;
-				}
-
-				// No read(), write a integer variable
-				read_int = 0;
-				errorcode = DP_ERROR_NONE;
-				is_checked = 1;
-				switch(command.cmd) {
-				case DP_CMD_GET_NOTIFICATION:
-					read_int = dp_db_get_int_column(command.id,
-									DP_DB_TABLE_REQUEST_INFO,
-									DP_DB_COL_NOTIFICATION_ENABLE);
-					break;
-				case DP_CMD_GET_AUTO_DOWNLOAD:
-					read_int = dp_db_get_int_column(command.id,
-									DP_DB_TABLE_REQUEST_INFO,
-									DP_DB_COL_AUTO_DOWNLOAD);
-					break;
-				case DP_CMD_GET_NETWORK_TYPE:
-					read_int = dp_db_get_int_column(command.id,
-									DP_DB_TABLE_REQUEST_INFO,
-									DP_DB_COL_NETWORK_TYPE);
-					break;
-				case DP_CMD_GET_HTTP_STATUS:
-					read_int = dp_db_get_int_column(command.id,
-									DP_DB_TABLE_DOWNLOAD_INFO,
-									DP_DB_COL_HTTP_STATUS);
-					break;
-				case DP_CMD_GET_STATE:
-					if (request == NULL) {
-						read_int = dp_db_get_int_column(command.id,
-								DP_DB_TABLE_LOG, DP_DB_COL_STATE);
-					} else {
-						CLIENT_MUTEX_LOCK(&request->mutex);
-						read_int = request->state;
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-					}
-					break;
-				case DP_CMD_GET_ERROR:
-					if (request == NULL) {
-						read_int = dp_db_get_int_column(command.id,
-								DP_DB_TABLE_LOG, DP_DB_COL_ERRORCODE);
-					} else {
-						CLIENT_MUTEX_LOCK(&request->mutex);
-						read_int = request->error;
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-					}
-					break;
-				default:
-					is_checked = 0;
-					break;
-				}
-				if (is_checked == 1) {
-					if (read_int < 0)
-						errorcode = DP_ERROR_NO_DATA;
-					dp_ipc_send_errorcode(sock, errorcode);
-					if (errorcode == DP_ERROR_NONE) {
-						dp_ipc_send_custom_type(sock, &read_int,
-							sizeof(int));
-					} else {
-						TRACE_ERROR("[ERROR][%d][%s][%s]", command.id,
-							__print_command(command.cmd),
-							dp_print_errorcode(errorcode));
-					}
-					continue;
-				}
-
-				// No read(), write a long long variable
-				unsigned long long recv_long = 0;
-				errorcode = DP_ERROR_NONE;
-				is_checked = 1;
-				switch(command.cmd) {
-				case DP_CMD_GET_RECEIVED_SIZE:
-					if (request == NULL) {
-						errorcode = DP_ERROR_NO_DATA;
-					} else {
-						CLIENT_MUTEX_LOCK(&request->mutex);
-						recv_long = request->received_size;
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-					}
-					break;
-				case DP_CMD_GET_TOTAL_FILE_SIZE:
-					if (request != NULL) {
-						CLIENT_MUTEX_LOCK(&request->mutex);
-						recv_long = request->file_size;
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-					} else {
-						long long file_size = dp_db_get_int64_column
-								(command.id, DP_DB_TABLE_DOWNLOAD_INFO,
-								DP_DB_COL_CONTENT_SIZE);
-						if (file_size < 0)
-							errorcode = DP_ERROR_NO_DATA;
-						else // casting
-							recv_long = file_size;
-					}
-					break;
-				default:
-					is_checked = 0;
-					break;
-				}
-				if (is_checked == 1) {
-					dp_ipc_send_errorcode(sock, errorcode);
-					if (errorcode == DP_ERROR_NONE) {
-						dp_ipc_send_custom_type(sock, &recv_long,
-							sizeof(unsigned long long));
-					} else {
-						TRACE_ERROR("[ERROR][%d][%s][%s]", command.id,
-							__print_command(command.cmd),
-							dp_print_errorcode(errorcode));
-					}
-					continue;
-				}
-
-				read_int = 0;
-				errorcode = DP_ERROR_NONE;
-				is_checked = 1;
-				switch(command.cmd) {
-				case DP_CMD_DESTROY:
-					if (request == NULL) {// just update the state
-						if (dp_db_set_column(command.id,
-								DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-								DP_DB_COL_TYPE_INT, &read_int) < 0)
-							errorcode = DP_ERROR_OUT_OF_MEMORY;
-						break;
-					}
-					if (request != NULL) { // call cancel in some cases
-						CLIENT_MUTEX_LOCK(&request->mutex);
-						if (__is_started(request->state) == 0) {
-							read_int = DP_STATE_CANCELED;
-							if (dp_db_set_column(command.id,
-								DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-								DP_DB_COL_TYPE_INT, &read_int) < 0) {
-								errorcode = DP_ERROR_OUT_OF_MEMORY;
-							} else {
-								if (__dp_call_cancel_agent(request) < 0)
-									TRACE_INFO("[fail][%d]cancel_agent",
-										command.id);
-								request->state = DP_STATE_CANCELED;
-							}
-						}
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-					}
-					break;
-				case DP_CMD_FREE:
-					// [destory]-[return]-[free]
-					// No return errorcode
-					if (request != NULL) {
-						dp_request_free(request);
-						privates->requests[index].request = NULL;
-					}
-					break;
-				case DP_CMD_START:
-				{
-					if (request != NULL) {
-						CLIENT_MUTEX_LOCK(&request->mutex);
-						if (__is_started(request->state) == 0 ||
-								request->state == DP_STATE_COMPLETED)
-							errorcode = DP_ERROR_INVALID_STATE;
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-					}
-					if (errorcode != DP_ERROR_NONE)
-						break;
-
-					// need URL at least
-					char *url = dp_request_get_url(command.id, request,
-							&errorcode);
-					if (url == NULL) {
-						errorcode = DP_ERROR_INVALID_URL;
-						break;
-					}
-					free(url);
-
-					if (request == NULL) { // Support Re-download
-						index = __get_empty_request_index
-								(privates->requests);
-						if (index < 0) { // Busy, No Space in slot
-							errorcode = DP_ERROR_QUEUE_FULL;
-						} else {
-							request = dp_request_load_from_log
-										(command.id, &errorcode);
-							if (request != NULL) {
-								// restore callback info
-								CLIENT_MUTEX_LOCK(&request->mutex);
-								request->state_cb =
-									dp_db_get_int_column(command.id,
-											DP_DB_TABLE_REQUEST_INFO,
-											DP_DB_COL_STATE_EVENT);
-								request->progress_cb =
-									dp_db_get_int_column(command.id,
-											DP_DB_TABLE_REQUEST_INFO,
-											DP_DB_COL_PROGRESS_EVENT);
-								privates->requests[index].request =
-									request;
-								CLIENT_MUTEX_UNLOCK(&request->mutex);
-							}
-						}
-					}
-					if (errorcode != DP_ERROR_NONE)
-						break;
-
-					dp_state_type state = DP_STATE_QUEUED;
-					if (dp_db_set_column(command.id, DP_DB_TABLE_LOG,
-							DP_DB_COL_STATE, DP_DB_COL_TYPE_INT,
-							&state) < 0) {
-						errorcode = DP_ERROR_OUT_OF_MEMORY;
-					} else {
-						group->queued_count++;
-						CLIENT_MUTEX_LOCK(&request->mutex);
-						request->start_time = (int)time(NULL);
-						request->pause_time = 0;
-						request->stop_time = 0;
-						request->state = state;
-						request->error = DP_ERROR_NONE;
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-						dp_db_update_date(command.id, DP_DB_TABLE_LOG,
-							DP_DB_COL_ACCESS_TIME);
-						//send signal to queue thread
-						dp_thread_queue_manager_wake_up();
-					}
-					break;
-				}
-				case DP_CMD_PAUSE:
-				{
-					// to check fastly, divide the case by request value
-					if (request == NULL) {
-						dp_state_type state =
-							dp_db_get_int_column(command.id,
-								DP_DB_TABLE_LOG, DP_DB_COL_STATE);
-						// already paused or stopped
-						if (state > DP_STATE_DOWNLOADING) {
-							errorcode = DP_ERROR_INVALID_STATE;
-						} else {
-							// change state to paused.
-							state = DP_STATE_PAUSED;
-							if (dp_db_set_column(command.id,
-									DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-									DP_DB_COL_TYPE_INT, &state) < 0)
-								errorcode = DP_ERROR_OUT_OF_MEMORY;
-						}
-						break;
-					}
-
-					CLIENT_MUTEX_LOCK(&request->mutex);
-
-					if (request->state > DP_STATE_DOWNLOADING) {
-						errorcode = DP_ERROR_INVALID_STATE;
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-						break;
-					}
-
-					// before downloading including QUEUED
-					if (__is_downloading(request->state) < 0) {
-						dp_state_type state = DP_STATE_PAUSED;
-						if (dp_db_set_column(command.id,
-								DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-								DP_DB_COL_TYPE_INT, &state) < 0) {
-							errorcode = DP_ERROR_OUT_OF_MEMORY;
-						} else {
-							request->state = state;
-						}
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
-						break;
-					}
-					// only downloading.
-					dp_state_type state = DP_STATE_PAUSE_REQUESTED;
-					if (dp_db_set_column(command.id, DP_DB_TABLE_LOG,
-							DP_DB_COL_STATE, DP_DB_COL_TYPE_INT,
-							&state) < 0) {
-						errorcode = DP_ERROR_OUT_OF_MEMORY;
-					} else {
-						TRACE_INFO("[%s][%d]pause_agent(%d) state:%s",
-							__print_command(command.cmd), command.id,
-							request->agent_id,
-							dp_print_state(request->state));
-						if (dp_pause_agent_download
-								(request->agent_id) < 0) {
-							TRACE_INFO("[fail][%d]pause_agent(%d)",
-								command.id, request->agent_id);
-						}
-						request->state = state;
-						request->error = DP_ERROR_NONE;
-						request->pause_time = (int)time(NULL);
-						dp_db_update_date(command.id, DP_DB_TABLE_LOG,
-							DP_DB_COL_ACCESS_TIME);
-					}
-					CLIENT_MUTEX_UNLOCK(&request->mutex);
-					break;
-				}
-				case DP_CMD_CANCEL:
-				{
-					// to check fastly, divide the case by request value
-					if (request == NULL) {
-						dp_state_type state =
-							dp_db_get_int_column(command.id,
-								DP_DB_TABLE_LOG, DP_DB_COL_STATE);
-						// already paused or stopped
-						if (__is_stopped(state) == 0) {
-							errorcode = DP_ERROR_INVALID_STATE;
-						} else {
-							// change state to canceled.
-							state = DP_STATE_CANCELED;
-							if (dp_db_set_column(command.id,
-									DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-									DP_DB_COL_TYPE_INT, &state) < 0)
-								errorcode = DP_ERROR_OUT_OF_MEMORY;
-						}
-						break;
-					}
-
-					CLIENT_MUTEX_LOCK(&request->mutex);
-
-					if (__is_stopped(request->state) == 0) {
-						errorcode = DP_ERROR_INVALID_STATE;
-					} else {
-						// change state to canceled.
-						dp_state_type state = DP_STATE_CANCELED;
-						if (dp_db_set_column(command.id,
-								DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-								DP_DB_COL_TYPE_INT, &state) < 0)
-							errorcode = DP_ERROR_OUT_OF_MEMORY;
-					}
-					if (errorcode == DP_ERROR_NONE) {
-						TRACE_INFO("[%s][%d]cancel_agent(%d) state:%s",
-							__print_command(command.cmd), command.id,
-							request->agent_id,
-							dp_print_state(request->state));
-						if (__dp_call_cancel_agent(request) < 0)
-							TRACE_INFO("[fail][%d]cancel_agent",
-								command.id);
-						request->state = DP_STATE_CANCELED;
-					}
-					CLIENT_MUTEX_UNLOCK(&request->mutex);
-					dp_db_update_date(command.id, DP_DB_TABLE_LOG,
-							DP_DB_COL_ACCESS_TIME);
-					break;
-				}
-				default:
-					is_checked = 0;
-					break;
-				}
-				if (is_checked == 1) {
-					if (errorcode != DP_ERROR_NONE) {
-						TRACE_ERROR("[ERROR][%d][%s][%s]", command.id,
-							__print_command(command.cmd),
-							dp_print_errorcode(errorcode));
-					}
-					if (command.cmd != DP_CMD_FREE) // free no return
-						dp_ipc_send_errorcode(sock, errorcode);
-					continue;
-				}
-
-				// complex read() and write().
-				char *read_str2 = NULL;
-				errorcode = DP_ERROR_NONE;
-				read_str = NULL;
-				is_checked = 1;
-				switch(command.cmd) {
-				case DP_CMD_SET_HTTP_HEADER:
-				{
-					if ((read_str = dp_ipc_read_string(sock)) == NULL) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					read_str2 = dp_ipc_read_string(sock);
-					if (read_str2 == NULL) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					int conds_count = 3; // id + field + data
-					db_conds_list_fmt conds_p[conds_count];
-					memset(&conds_p, 0x00,
-						conds_count * sizeof(db_conds_list_fmt));
-					conds_p[0].column = DP_DB_COL_ID;
-					conds_p[0].type = DP_DB_COL_TYPE_INT;
-					conds_p[0].value = &command.id;
-					conds_p[1].column = DP_DB_COL_HEADER_FIELD;
-					conds_p[1].type = DP_DB_COL_TYPE_TEXT;
-					conds_p[1].value = read_str;
-					conds_p[2].column = DP_DB_COL_HEADER_DATA;
-					conds_p[2].type = DP_DB_COL_TYPE_TEXT;
-					conds_p[2].value = read_str2;
-					if (dp_db_get_conds_rows_count
-							(DP_DB_TABLE_HTTP_HEADERS, DP_DB_COL_ID,
-							"AND", 2, conds_p) <= 0) { // insert
-						if (dp_db_insert_columns
-								(DP_DB_TABLE_HTTP_HEADERS, conds_count,
-								conds_p) < 0)
-							errorcode = DP_ERROR_OUT_OF_MEMORY;
-					} else { // update data by field
-						if (dp_db_cond_set_column(command.id,
-								DP_DB_TABLE_HTTP_HEADERS,
-								DP_DB_COL_HEADER_DATA,
-								DP_DB_COL_TYPE_TEXT, read_str2,
-								DP_DB_COL_HEADER_FIELD,
-								DP_DB_COL_TYPE_TEXT, read_str) < 0)
-							errorcode = DP_ERROR_OUT_OF_MEMORY;
-					}
-					dp_ipc_send_errorcode(sock, errorcode);
-					break;
-				}
-				case DP_CMD_DEL_HTTP_HEADER:
-					if ((read_str = dp_ipc_read_string(sock)) == NULL) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					if (dp_db_get_cond_rows_count(command.id,
-							DP_DB_TABLE_HTTP_HEADERS,
-							DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT,
-							read_str) < 0) {
-						errorcode = DP_ERROR_NO_DATA;
-					} else {
-						if (dp_db_cond_remove(command.id,
-								DP_DB_TABLE_HTTP_HEADERS,
-								DP_DB_COL_HEADER_FIELD,
-								DP_DB_COL_TYPE_TEXT, read_str) < 0)
-							errorcode = DP_ERROR_OUT_OF_MEMORY;
-					}
-					dp_ipc_send_errorcode(sock, errorcode);
-					break;
-				case DP_CMD_GET_HTTP_HEADER:
-					if ((read_str = dp_ipc_read_string(sock)) == NULL) {
-						errorcode = DP_ERROR_IO_ERROR;
-						break;
-					}
-					read_str2 = dp_db_cond_get_text_column(command.id,
-						DP_DB_TABLE_HTTP_HEADERS, DP_DB_COL_HEADER_DATA,
-						DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT,
-						read_str);
-					if (read_str2 == NULL)
-						errorcode = DP_ERROR_NO_DATA;
-					dp_ipc_send_errorcode(sock, errorcode);
-					if (errorcode == DP_ERROR_NONE)
-						dp_ipc_send_string(sock, read_str2);
-					break;
-				case DP_CMD_GET_HTTP_HEADER_LIST:
-				{
-					char **values = NULL;
-					unsigned rows_count = 0;
-					errorcode = __dp_get_http_header_fields(sock,
-							command.id, &values, &rows_count);
-					if (errorcode == DP_ERROR_NONE) {
-						__send_return_custom_type(sock, DP_ERROR_NONE,
-							&rows_count, sizeof(int));
-						// sending strings
-						int i = 0;
-						for (i = 0; i < rows_count; i++) {
-							if (dp_ipc_send_string(sock, values[i]) < 0)
-								break;
-						}
-						for (i = 0; i < rows_count; i++)
-							free(values[i]);
-					} else {
-						if (errorcode != DP_ERROR_IO_ERROR)
-							dp_ipc_send_errorcode(sock, errorcode);
-					}
-					free(values);
-					break;
-				}
-				case DP_CMD_ADD_EXTRA_PARAM:
-					errorcode = __dp_add_extra_param(sock, command.id);
-					if (errorcode != DP_ERROR_IO_ERROR)
-						dp_ipc_send_errorcode(sock, errorcode);
-					break;
-				case DP_CMD_GET_EXTRA_PARAM:
-				{
-					char **values = NULL;
-					unsigned rows_count = 0;
-					errorcode = __dp_get_extra_param_values(sock,
-							command.id, &values, &rows_count);
-					if (errorcode == DP_ERROR_NONE) {
-						__send_return_custom_type(sock, DP_ERROR_NONE,
-							&rows_count, sizeof(int));
-						// sending strings
-						int i = 0;
-						for (i = 0; i < rows_count; i++) {
-							if (dp_ipc_send_string(sock, values[i]) < 0)
-								break;
-						}
-						for (i = 0; i < rows_count; i++)
-							free(values[i]);
-					} else {
-						if (errorcode != DP_ERROR_IO_ERROR)
-							dp_ipc_send_errorcode(sock, errorcode);
-					}
-					free(values);
-					break;
-				}
-				case DP_CMD_REMOVE_EXTRA_PARAM:
-					errorcode =
-						__dp_remove_extra_param(sock, command.id);
-					if (errorcode != DP_ERROR_IO_ERROR)
-						dp_ipc_send_errorcode(sock, errorcode);
-					break;
-				default: // UNKNOWN COMMAND
-					is_checked = 0;
-					break;
-				}
-				if (is_checked == 1) {
-					if (errorcode != DP_ERROR_NONE) {
-						TRACE_ERROR("[ERROR][%d][%s][%s]", command.id,
-							__print_command(command.cmd),
-							dp_print_errorcode(errorcode));
-						if (errorcode == DP_ERROR_IO_ERROR) {
-							FD_CLR(sock, &listen_fdset);
-							__clear_group(privates, group);
-							privates->groups[i].group = NULL;
-						}
-					}
-					free(read_str);
-					free(read_str2);
-				} else { // UnKnown Command
+				if (errorcode == DP_ERROR_UNKNOWN) { // UnKnown Command
 					TRACE_INFO("[UNKNOWN][%d] slot:%d pid:%d",
 						command.id, i,
 						privates->groups[i].group->credential.pid);
@@ -1731,21 +1754,20 @@ void *dp_thread_requests_manager(void *arg)
 								(privates->requests,
 								old_requests[i].request->id);
 						if (index >= 0) {
+							CLIENT_MUTEX_LOCK(&privates->requests[index].mutex);
 							dp_request *request =
 								privates->requests[index].request;
 							// if downloading..remain it.
-							CLIENT_MUTEX_LOCK(&request->mutex);
-							if (__is_downloading(request->state) == 0) {
-								CLIENT_MUTEX_UNLOCK(&request->mutex);
+							if (request == NULL || __is_downloading(request->state) == 0) {
+								CLIENT_MUTEX_UNLOCK(&privates->requests[index].mutex);
 								continue;
 							}
-							CLIENT_MUTEX_UNLOCK(&request->mutex);
+							CLIENT_MUTEX_UNLOCK(&privates->requests[index].mutex);
 							TRACE_INFO("[CLEAR][%d] 48 hour state:%s",
 								request->id,
 								dp_print_state(request->state));
 							// unload from slots ( memory )
-							dp_request_free(request);
-							privates->requests[index].request = NULL;
+							dp_request_slot_free(&privates->requests[index]);
 						}
 						// remove tmp file regardless 
 						__dp_remove_tmpfile
@@ -1761,28 +1783,28 @@ void *dp_thread_requests_manager(void *arg)
 			// clean slots
 			int ready_requests = 0;
 			for (i = 0; i < DP_MAX_REQUEST; i++) {
-				if (privates->requests[i].request == NULL)
+				CLIENT_MUTEX_LOCK(&privates->requests[i].mutex);
+				if (privates->requests[i].request == NULL) {
+					CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 					continue;
+				}
 				dp_request *request = privates->requests[i].request;
-
-				CLIENT_MUTEX_LOCK(&request->mutex);
 
 				// If downloading is too slow ? how to deal this request?
 				// can limit too slot download using starttime.(48 hours)
 				if (__is_downloading(request->state) == 0) {
-					CLIENT_MUTEX_UNLOCK(&request->mutex);
+					CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 					continue;
 				}
 
 				// paused & agent_id not exist.... unload from memory.
 				if (request->state == DP_STATE_PAUSED &&
 						dp_is_alive_download(request->agent_id) == 0) {
-					CLIENT_MUTEX_UNLOCK(&request->mutex);
 					TRACE_INFO("[FREE][%d] dead agent-id(%d) state:%s",
 						request->id, request->agent_id,
 						dp_print_state(request->state));
-					dp_request_free(request);
-					privates->requests[i].request = NULL;
+					CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
+					dp_request_slot_free(&privates->requests[i]);
 					continue;
 				}
 
@@ -1804,9 +1826,8 @@ void *dp_thread_requests_manager(void *arg)
 							request->group->event_socket >= 0)
 						dp_ipc_send_event(request->group->event_socket,
 							download_id, state, errorcode, 0);
-					CLIENT_MUTEX_UNLOCK(&request->mutex);
-					dp_request_free(request);
-					privates->requests[i].request = NULL;
+					CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
+					dp_request_slot_free(&privates->requests[i]);
 					// no problem although updating is failed.
 					if (dp_db_set_column(download_id, DP_DB_TABLE_LOG,
 							DP_DB_COL_STATE, DP_DB_COL_TYPE_INT,
@@ -1827,14 +1848,13 @@ void *dp_thread_requests_manager(void *arg)
 						DP_CARE_CLIENT_MAX_INTERVAL) {
 					// check state again. stop_time means it's stopped
 					if (__is_stopped(request->state) == 0) {
-						CLIENT_MUTEX_UNLOCK(&request->mutex);
 						TRACE_INFO
 							("[FREE][%d] by timeout state:%s stop:%ld",
 							request->id,
 							dp_print_state(request->state),
 							request->stop_time);
-						dp_request_free(request);
-						privates->requests[i].request = NULL;
+						CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
+						dp_request_slot_free(&privates->requests[i]);
 						continue;
 					}
 				}
@@ -1843,7 +1863,7 @@ void *dp_thread_requests_manager(void *arg)
 				if (request->state == DP_STATE_QUEUED)
 					ready_requests++;
 
-				CLIENT_MUTEX_UNLOCK(&request->mutex);
+				CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 			}
 
 			if (ready_requests > 0) {

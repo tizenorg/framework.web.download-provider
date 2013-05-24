@@ -425,7 +425,7 @@ dp_error_type dp_request_set_state_event(int id, dp_request *request, unsigned e
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
 	// update memory
-	if (request)
+	if (request != NULL)
 		request->state_cb = enable;
 	return DP_ERROR_NONE;
 }
@@ -493,7 +493,7 @@ dp_error_type dp_request_set_network_type(int id, dp_request *request, int type)
 	return DP_ERROR_NONE;
 }
 
-char *dp_request_get_url(int id, dp_request *request, dp_error_type *errorcode)
+char *dp_request_get_url(int id, dp_error_type *errorcode)
 {
 	char *url = NULL;
 	url = dp_db_get_text_column

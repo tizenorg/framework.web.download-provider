@@ -109,14 +109,21 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 		return ;
 	}
 	dp_request_slots *request_slot = (dp_request_slots *) user_data;
-	if (request_slot == NULL || request_slot->request == NULL) {
+	if (request_slot == NULL) {
 		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
+		return ;
+	}
+	CLIENT_MUTEX_LOCK(&request_slot->mutex);
+	if (request_slot->request == NULL) {
+		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return ;
 	}
 	dp_request *request = request_slot->request;
 	if (request->id < 0 || (request->agent_id != info->download_id)) {
 		TRACE_ERROR("[NULL-CHECK] agent_id : %d req_id %d",
 			request->agent_id, info->download_id);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return ;
 	}
 
@@ -189,7 +196,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 			dp_set_downloadinginfo_notification
 				(request->id, request->packagename);
 
-	CLIENT_MUTEX_UNLOCK(&request->mutex);
+	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 }
 
 static void __progress_cb(user_progress_info_t *info, void *user_data)
@@ -199,18 +206,24 @@ static void __progress_cb(user_progress_info_t *info, void *user_data)
 		return ;
 	}
 	dp_request_slots *request_slot = (dp_request_slots *) user_data;
-	if (request_slot == NULL || request_slot->request == NULL) {
+	if (request_slot == NULL) {
 		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
+		return ;
+	}
+	CLIENT_MUTEX_LOCK(&request_slot->mutex);
+	if (request_slot->request == NULL) {
+		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return ;
 	}
 	dp_request *request = request_slot->request;
 	if (request->id < 0 || (request->agent_id != info->download_id)) {
 		TRACE_ERROR("[NULL-CHECK] agent_id : %d req_id %d",
 			request->agent_id, info->download_id);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return ;
 	}
 
-	CLIENT_MUTEX_LOCK(&request->mutex);
 	if (request->state == DP_STATE_DOWNLOADING) {
 		request->received_size = info->received_size;
 		time_t tt = time(NULL);
@@ -231,7 +244,7 @@ static void __progress_cb(user_progress_info_t *info, void *user_data)
 					(double)request->file_size);
 		}
 	}
-	CLIENT_MUTEX_UNLOCK(&request->mutex);
+	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 }
 
 static void __finished_cb(user_finished_info_t *info, void *user_data)
@@ -243,18 +256,23 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 	TRACE_INFO("Agent ID[%d] err[%d] http_status[%d]",
 		info->download_id, info->err, info->http_status);
 	dp_request_slots *request_slot = (dp_request_slots *) user_data;
-	if (request_slot == NULL || request_slot->request == NULL) {
+	if (request_slot == NULL) {
 		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
+		return ;
+	}
+	CLIENT_MUTEX_LOCK(&request_slot->mutex);
+	if (request_slot->request == NULL) {
+		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return ;
 	}
 	dp_request *request = request_slot->request;
 	if (request->id < 0 || (request->agent_id != info->download_id)) {
 		TRACE_ERROR("[NULL-CHECK] agent_id : %d req_id %d",
 			request->agent_id, info->download_id);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return ;
 	}
-
-	CLIENT_MUTEX_LOCK(&request->mutex);
 
 	int request_id = request->id;
 	dp_credential cred = request->credential;
@@ -379,7 +397,7 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 
 	request->stop_time = (int)time(NULL);
 
-	CLIENT_MUTEX_UNLOCK(&request->mutex);
+	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 
 	dp_thread_queue_manager_wake_up();
 }
@@ -388,18 +406,24 @@ static void __paused_cb(user_paused_info_t *info, void *user_data)
 {
 	TRACE_INFO("");
 	dp_request_slots *request_slot = (dp_request_slots *) user_data;
-	if (request_slot == NULL || request_slot->request == NULL) {
+	if (request_slot == NULL) {
 		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
+		return ;
+	}
+	CLIENT_MUTEX_LOCK(&request_slot->mutex);
+	if (request_slot->request == NULL) {
+		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return ;
 	}
 	dp_request *request = request_slot->request;
 	if (request->id < 0 || (request->agent_id != info->download_id)) {
 		TRACE_ERROR("[NULL-CHECK] agent_id : %d req_id %d",
 			request->agent_id, info->download_id);
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return ;
 	}
 
-	CLIENT_MUTEX_LOCK(&request->mutex);
 	int request_id = request->id;
 	CLIENT_MUTEX_UNLOCK(&request->mutex);
 
@@ -426,7 +450,7 @@ static void __paused_cb(user_paused_info_t *info, void *user_data)
 	if (request->group)
 		request->group->queued_count--;
 
-	CLIENT_MUTEX_UNLOCK(&request->mutex);
+	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 
 	dp_thread_queue_manager_wake_up();
 }
@@ -512,17 +536,24 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 	char *etag = NULL;
 
 	TRACE_INFO("");
-	if (request_slot == NULL || request_slot->request == NULL) {
+	if (request_slot == NULL) {
 		TRACE_ERROR("[NULL-CHECK] download_clientinfo_slot");
 		return DP_ERROR_INVALID_PARAMETER;
 	}
-	dp_request *request = request_slot->request;
-	CLIENT_MUTEX_LOCK(&(request->mutex));
 
-	char *url = dp_request_get_url(request->id, request, &errorcode);
+	CLIENT_MUTEX_LOCK(&request_slot->mutex);
+	if (request_slot->request == NULL) {
+		TRACE_ERROR("[NULL-CHECK] download_clientinfo_slot");
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+		return DP_ERROR_INVALID_PARAMETER;
+	}
+
+	dp_request *request = request_slot->request;
+
+	char *url = dp_request_get_url(request->id, &errorcode);
 	if (url == NULL) {
 		TRACE_ERROR("[ERROR][%d] URL is NULL", request->id);
-		CLIENT_MUTEX_UNLOCK(&(request->mutex));
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return DP_ERROR_INVALID_URL;
 	}
 	char *destination =
@@ -597,17 +628,17 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 	if (da_ret == DA_ERR_ALREADY_MAX_DOWNLOAD) {
 		TRACE_INFO("[PENDING][%d] DA_ERR_ALREADY_MAX_DOWNLOAD [%d]",
 			request->id, da_ret);
-		CLIENT_MUTEX_UNLOCK(&(request->mutex));
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return DP_ERROR_TOO_MANY_DOWNLOADS;
 	} else if (da_ret != DA_RESULT_OK) {
 		TRACE_ERROR("[ERROR][%d] DP_ERROR_CONNECTION_FAILED [%d]",
 			request->id, da_ret);
-		CLIENT_MUTEX_UNLOCK(&(request->mutex));
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 		return __change_error(da_ret);
 	}
 	TRACE_INFO("[SUCCESS][%d] agent_id [%d]", request->id, req_dl_id);
 	request->agent_id = req_dl_id;
-	CLIENT_MUTEX_UNLOCK(&(request->mutex));
+	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 	return DP_ERROR_NONE;
 }
 

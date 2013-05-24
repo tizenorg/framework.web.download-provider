@@ -42,18 +42,21 @@ dp_group_slots *dp_client_group_slots_new(int size)
 dp_request_slots *dp_request_slots_new(int size)
 {
 	TRACE_INFO("");
+	int i = 0;
 	dp_request_slots *slots = NULL;
 	if (size <= 0)
 		return NULL;
 	slots = (dp_request_slots *) calloc(size,
 			sizeof(dp_request_slots));
+	for (; i < size; i++)
+		CLIENT_MUTEX_INIT(&slots[i].mutex, NULL);
 	return slots;
 }
 
 void dp_request_init(dp_request *request)
 {
 	TRACE_INFO("");
-	if (!request)
+	if (request == NULL)
 		return ;
 
 	request->id = -1;
@@ -84,23 +87,29 @@ dp_request *dp_request_new()
 			sizeof(dp_request));
 	if (!request)
 		return NULL;
-	CLIENT_MUTEX_INIT(&(request->mutex), NULL);
 	dp_request_init(request);
 	return request;
 }
 
-int dp_request_free(dp_request *request)
+int dp_request_slot_free(dp_request_slots *request_slot)
 {
 	TRACE_INFO("");
 
-	if (!request)
+	if (request_slot == NULL)
 		return -1;
-	CLIENT_MUTEX_LOCK(&(request->mutex));
-	if (request->packagename)
-		free(request->packagename);
+	CLIENT_MUTEX_LOCK(&request_slot->mutex);
+	dp_request_free(request_slot->request);
+	request_slot->request = NULL;
+	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+	return 0;
+}
+
+int dp_request_free(dp_request *request)
+{
+	if (request == NULL)
+		return -1;
+	free(request->packagename);
 	dp_request_init(request);
-	CLIENT_MUTEX_UNLOCK(&(request->mutex));
-	CLIENT_MUTEX_DESTROY(&(request->mutex));
 	free(request);
 	return 0;
 }
@@ -142,11 +151,11 @@ int dp_request_slots_free(dp_request_slots *slots, int size)
 {
 	TRACE_INFO("");
 	int i = 0;
-	if (slots) {
+	if (slots != NULL) {
 		for (; i < size; i++) {
-			if (slots->request)
-				dp_request_free(slots->request);
-			slots->request = NULL;
+			dp_request_free(slots[i].request);
+			slots[i].request = NULL;
+			CLIENT_MUTEX_DESTROY(&slots[i].mutex);
 		}
 		free(slots);
 	}
@@ -164,8 +173,11 @@ int dp_get_request_count(dp_request_slots *slots)
 	if (!slots)
 		return -1;
 
-	for (i = 0; i < DP_MAX_REQUEST; i++)
-		if (slots[i].request)
+	for (i = 0; i < DP_MAX_REQUEST; i++) {
+		CLIENT_MUTEX_LOCK(&slots[i].mutex);
+		if (slots[i].request != NULL)
 			count++;
+		CLIENT_MUTEX_UNLOCK(&slots[i].mutex);
+	}
 	return count;
 }

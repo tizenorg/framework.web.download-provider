@@ -73,15 +73,17 @@ static unsigned __get_active_count(dp_request_slots *requests)
 	unsigned count = 0;
 	unsigned i = 0;
 
-	if (!requests)
+	if (requests == NULL)
 		return 0;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
-		if (requests[i].request) {
+		CLIENT_MUTEX_LOCK(&requests[i].mutex);
+		if (requests[i].request != NULL) {
 			if (requests[i].request->state == DP_STATE_CONNECTING ||
 				requests[i].request->state == DP_STATE_DOWNLOADING)
 				count++;
 		}
+		CLIENT_MUTEX_UNLOCK(&requests[i].mutex);
 	}
 	return count;
 }
@@ -99,6 +101,7 @@ static int __get_oldest_request_with_network(dp_request_slots *requests, dp_stat
 		return -1;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
+		CLIENT_MUTEX_LOCK(&requests[i].mutex);
 		if (requests[i].request != NULL) {
 			if (requests[i].request->state == state &&
 				requests[i].request->start_time > 0 &&
@@ -109,6 +112,7 @@ static int __get_oldest_request_with_network(dp_request_slots *requests, dp_stat
 				oldest_index = i;
 			}
 		}
+		CLIENT_MUTEX_UNLOCK(&requests[i].mutex);
 	}
 	return oldest_index;
 }
@@ -137,7 +141,7 @@ static void *__request_download_start_agent(void *args)
 		errcode = dp_start_agent_download(request_slot);
 	}
 
-	CLIENT_MUTEX_LOCK(&(request->mutex));
+	CLIENT_MUTEX_LOCK(&request_slot->mutex);
 	// send to state callback.
 	if (errcode == DP_ERROR_NONE) {
 		// CONNECTING
@@ -171,7 +175,7 @@ static void *__request_download_start_agent(void *args)
 			DP_DB_COL_TYPE_INT, &request->state) < 0)
 		TRACE_ERROR("[ERROR][%d][SQL]", request->id);
 
-	CLIENT_MUTEX_UNLOCK(&(request->mutex));
+	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 	pthread_exit(NULL);
 	return 0;
 }
@@ -294,8 +298,9 @@ void *dp_thread_queue_manager(void *arg)
 		// guarantee 1 instant download per 1 group
 		if (active_count >= DP_MAX_DOWNLOAD_AT_ONCE) {
 			for (i = 0; i < DP_MAX_REQUEST; i++) {
+				CLIENT_MUTEX_LOCK(&privates->requests[i].mutex);
 				request = privates->requests[i].request;
-				if (request && request->state == DP_STATE_QUEUED) {
+				if (request != NULL && request->state == DP_STATE_QUEUED) {
 					group = privates->requests[i].request->group;
 					if (group && group->queued_count == 1) {
 						if (__is_matched_network
@@ -312,6 +317,7 @@ void *dp_thread_queue_manager(void *arg)
 						}
 					}
 				}
+				CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 			}
 		}
 
@@ -333,7 +339,6 @@ void *dp_thread_queue_manager(void *arg)
 						DP_STATE_QUEUED, DP_NETWORK_TYPE_WIFI_DIRECT);
 				if (i >= 0) {
 					TRACE_INFO("Found WIFI-Direct request %d", i);
-					request = privates->requests[i].request;
 					if (__request_download_start_thread(&privates->requests[i]) == 0)
 						active_count++;
 					continue;
@@ -351,7 +356,6 @@ void *dp_thread_queue_manager(void *arg)
 			}
 			TRACE_INFO("QUEUE Status now %d active %d/%d", i,
 				active_count, DP_MAX_DOWNLOAD_AT_ONCE);
-			request = privates->requests[i].request;
 			__request_download_start_thread(&privates->requests[i]);
 			active_count++;
 		}

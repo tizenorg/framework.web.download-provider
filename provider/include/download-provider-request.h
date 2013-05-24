@@ -34,7 +34,7 @@ dp_error_type dp_request_set_auto_download(int id, dp_request *request, unsigned
 dp_error_type dp_request_set_state_event(int id, dp_request *request, unsigned enable);
 dp_error_type dp_request_set_progress_event(int id, dp_request *request, unsigned enable);
 dp_error_type dp_request_set_network_type(int id, dp_request *request, int type);
-char *dp_request_get_url(int id, dp_request *request, dp_error_type *errorcode);
+char *dp_request_get_url(int id, dp_error_type *errorcode);
 char *dp_request_get_destination(int id, dp_request *request, dp_error_type *errorcode);
 char *dp_request_get_filename(int id, dp_request *request, dp_error_type *errorcode);
 char *dp_request_get_contentname(int id, dp_request *request, dp_error_type *errorcode);
