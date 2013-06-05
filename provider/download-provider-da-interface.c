@@ -22,6 +22,8 @@
 #include <time.h>
 #include <sys/time.h>
 
+#include <dlfcn.h> // dlopen
+
 #include "download-provider.h"
 #include "download-provider-log.h"
 #include "download-provider-pthread.h"
@@ -33,6 +35,16 @@
 
 #include "download-agent-defs.h"
 #include "download-agent-interface.h"
+
+static void *g_da_handle = NULL;
+static int (*download_agent_init)(da_client_cb_t *) = NULL; // int da_init(da_client_cb_t *da_client_callback);
+static int (*download_agent_deinit)() = NULL; //  int da_deinit();
+static int (*download_agent_is_alive)(int) = NULL;  // int da_is_valid_download_id(int download_id);
+static int (*download_agent_suspend)(int) = NULL; // int da_suspend_download(int download_id);
+static int (*download_agent_resume)(int) = NULL; // int da_resume_download(int download_id);
+static int (*download_agent_cancel)(int) = NULL; // int da_cancel_download(int download_id);
+static int (*download_agent_start)(const char *, extension_data_t *, int *) = NULL; // int da_start_download_with_extension(const char *url, extension_data_t *ext_data, int *download_id);
+
 
 int dp_is_file_exist(const char *file_path)
 {
@@ -443,14 +455,79 @@ static void __paused_cb(user_paused_info_t *info, void *user_data)
 
 int dp_init_agent()
 {
-	int da_ret = 0;
+
+	g_da_handle = dlopen("/usr/lib/libdownloadagent2.so", RTLD_LAZY | RTLD_GLOBAL);
+	if (!g_da_handle) {
+		TRACE_ERROR("[dlopen] %s", dlerror());
+		g_da_handle = NULL;
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+	dlerror();    /* Clear any existing error */
+
+	*(void **) (&download_agent_init) = dlsym(g_da_handle, "da_init");
+	if (download_agent_init == NULL ) {
+		TRACE_ERROR("[dlsym] da_init:%s", dlerror());
+		dlclose(g_da_handle);
+		g_da_handle = NULL;
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	*(void **) (&download_agent_deinit)  = dlsym(g_da_handle, "da_deinit");
+	if (download_agent_deinit == NULL ) {
+		TRACE_ERROR("[dlsym] da_deinit:%s", dlerror());
+		dlclose(g_da_handle);
+		g_da_handle = NULL;
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	*(void **) (&download_agent_is_alive)  = dlsym(g_da_handle, "da_is_valid_download_id");
+	if (download_agent_is_alive == NULL ) {
+		TRACE_ERROR("[dlsym] da_is_valid_download_id:%s", dlerror());
+		dlclose(g_da_handle);
+		g_da_handle = NULL;
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	*(void **) (&download_agent_suspend)  = dlsym(g_da_handle, "da_suspend_download");
+	if (download_agent_suspend == NULL ) {
+		TRACE_ERROR("[dlsym] da_suspend_download:%s", dlerror());
+		dlclose(g_da_handle);
+		g_da_handle = NULL;
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	*(void **) (&download_agent_resume)  = dlsym(g_da_handle, "da_resume_download");
+	if (download_agent_resume == NULL ) {
+		TRACE_ERROR("[dlsym] da_resume_download:%s", dlerror());
+		dlclose(g_da_handle);
+		g_da_handle = NULL;
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	*(void **) (&download_agent_cancel)  = dlsym(g_da_handle, "da_cancel_download");
+	if (download_agent_cancel == NULL ) {
+		TRACE_ERROR("[dlsym] da_cancel_download:%s", dlerror());
+		dlclose(g_da_handle);
+		g_da_handle = NULL;
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	*(void **) (&download_agent_start)  = dlsym(g_da_handle, "da_start_download_with_extension");
+	if (download_agent_start == NULL ) {
+		TRACE_ERROR("[dlsym] da_start_download_with_extension:%s", dlerror());
+		dlclose(g_da_handle);
+		g_da_handle = NULL;
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	int da_ret = -1;
 	da_client_cb_t da_cb = {
 		__download_info_cb,
 		__progress_cb,
 		__finished_cb,
 		__paused_cb
 	};
-	da_ret = da_init(&da_cb);
+	da_ret = (*download_agent_init)(&da_cb);
 	if (da_ret != DA_RESULT_OK) {
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
@@ -459,7 +536,13 @@ int dp_init_agent()
 
 void dp_deinit_agent()
 {
-	da_deinit();
+	if (g_da_handle != NULL) {
+		if (download_agent_deinit != NULL)
+			(*download_agent_deinit)();
+
+		dlclose(g_da_handle);
+		g_da_handle = NULL;
+	}
 }
 
 // 1 : alive
@@ -471,7 +554,8 @@ int dp_is_alive_download(int req_id)
 		TRACE_ERROR("[NULL-CHECK] req_id");
 		return 0;
 	}
-	da_ret = da_is_valid_download_id(req_id);
+	if (download_agent_is_alive != NULL)
+		da_ret = (*download_agent_is_alive)(req_id);
 	return da_ret;
 }
 
@@ -487,8 +571,10 @@ dp_error_type dp_cancel_agent_download(int req_id)
 		TRACE_ERROR("[CHECK agent-id:%d] dead request", req_id);
 		return -1;
 	}
-	if (da_cancel_download(req_id) == DA_RESULT_OK)
-		return 0;
+	if (download_agent_cancel != NULL) {
+		if ((*download_agent_cancel)(req_id) == DA_RESULT_OK)
+			return 0;
+	}
 	return -1;
 }
 
@@ -504,8 +590,10 @@ dp_error_type dp_pause_agent_download(int req_id)
 		TRACE_ERROR("[CHECK agent-id:%d] dead request", req_id);
 		return -1;
 	}
-	if (da_suspend_download(req_id) == DA_RESULT_OK)
-		return 0;
+	if (download_agent_suspend != NULL) {
+		if ((*download_agent_suspend)(req_id) == DA_RESULT_OK)
+			return 0;
+	}
 	return -1;
 }
 
@@ -590,8 +678,8 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 	ext_data.user_data = (void *)request_slot;
 
 	// call start API of agent lib
-	da_ret =
-		da_start_download_with_extension(url, &ext_data, &req_dl_id);
+	if (download_agent_start != NULL)
+		da_ret = (*download_agent_start)(url, &ext_data, &req_dl_id);
 	if (ext_data.request_header_count > 0) {
 		int len = 0;
 		int i = 0;
@@ -640,7 +728,8 @@ dp_error_type dp_resume_agent_download(int req_id)
 		TRACE_ERROR("[NULL-CHECK] req_id");
 		return DP_ERROR_INVALID_PARAMETER;
 	}
-	da_ret = da_resume_download(req_id);
+	if (download_agent_resume != NULL)
+		da_ret = (*download_agent_resume)(req_id);
 	if (da_ret == DA_RESULT_OK)
 		return DP_ERROR_NONE;
 	else if (da_ret == DA_ERR_INVALID_STATE)
