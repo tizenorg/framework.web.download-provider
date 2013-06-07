@@ -589,6 +589,18 @@ char *dp_request_get_mimetype(int id, dp_request *request, dp_error_type *errorc
 	return mimetype;
 }
 
+char *dp_request_get_pkg_name(int id, dp_request *request, dp_error_type *errorcode)
+{
+	char *pkg_name = NULL;
+	pkg_name = dp_db_get_text_column
+				(id, DP_DB_TABLE_LOG, DP_DB_COL_PACKAGENAME);
+	if (pkg_name == NULL) {
+		*errorcode = DP_ERROR_NO_DATA;
+		return NULL;
+	}
+	return pkg_name;
+}
+
 dp_request *dp_request_load_from_log(int id, dp_error_type *errorcode)
 {
 	dp_request *request = NULL;

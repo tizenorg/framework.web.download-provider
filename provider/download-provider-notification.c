@@ -17,6 +17,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "bundle.h"
 #include "notification.h"
@@ -29,6 +30,7 @@
 
 #include <libintl.h>
 #define S_(s) dgettext("sys_string", s)
+#define __(s) dgettext(PKG_NAME, s)
 
 #define DP_NOTIFICATION_ICON_PATH IMAGE_DIR"/Q02_Notification_Download_failed.png"
 
@@ -54,21 +56,96 @@ static const char *__noti_error_str(
 	return "Unknown error";
 }
 
+static char *__get_string_sender(char *url)
+{
+	char *temp = NULL;
+	char *found = NULL;
+	char *found1 = NULL;
+	char *sender = NULL;
+	char *credential_sender = NULL;
+
+	if (url == NULL)
+		return NULL;
+
+	found = strstr(url, "://");
+	if (found) {
+		temp = found + 3;
+	} else {
+		temp = url;
+	}
+	found = strchr(temp, '/');
+	if (found) {
+		int len = 0;
+		len = found - temp;
+		sender = calloc(len + 1, sizeof(char));
+		if (sender == NULL)
+			return NULL;
+		snprintf(sender, len + 1, "%s", temp);
+	} else {
+		sender = dp_strdup(temp);
+	}
+
+	// For credential URL
+	found = strchr(sender, '@');
+	found1 = strchr(sender, ':');
+	if (found && found1 && found1 < found) {
+		int len = 0;
+		found = found + 1;
+		len = strlen(found);
+		credential_sender = calloc(len + 1, sizeof(char));
+		if (credential_sender == NULL) {
+			free(sender);
+			return NULL;
+		}
+		snprintf(credential_sender, len + 1, "%s", found);
+		free(sender);
+		return credential_sender;
+	} else {
+		return sender;
+	}
+}
+
+static char *__get_string_size(long long file_size)
+{
+	const char *unitStr[4] = {"B", "KB", "MB", "GB"};
+	double doubleTypeBytes = 0.0;
+	int unit = 0;
+	long long bytes = file_size;
+	long long unitBytes = bytes;
+	char *temp = NULL;
+
+	/* using bit operation to avoid floating point arithmetic */
+	for (unit = 0; (unitBytes > 1024 && unit < 4); unit++) {
+		unitBytes = unitBytes >> 10;
+	}
+	unitBytes = 1 << (10 * unit);
+
+	if (unit > 3)
+		unit = 3;
+
+	char str[64] = {0};
+	if (unit == 0) {
+		snprintf(str, sizeof(str), "%lld %s", bytes, unitStr[unit]);
+	} else {
+		doubleTypeBytes = ((double)bytes / (double)unitBytes);
+		snprintf(str, sizeof(str), "%.2f %s", doubleTypeBytes, unitStr[unit]);
+	}
+
+	str[63] = '\0';
+	temp = dp_strdup(str);
+	return temp;
+}
+
 static char *__get_string_status(dp_state_type state)
 {
 	char *message = NULL;
 	switch (state) {
 	case DP_STATE_COMPLETED:
-		//message = S_("IDS_COM_POP_SUCCESS");
-		message = "Completed";
+		message = __("IDS_RH_POP_DOWNLOAD_COMPLETE");
 		break;
 	case DP_STATE_CANCELED:
-		//message = S_("IDS_COM_POP_CANCELLED");
-		message = "Canceled";
-		break;
 	case DP_STATE_FAILED:
-		//message = S_("IDS_COM_POP_FAILED");
-		message = "Failed";
+		message = S_("IDS_COM_POP_DOWNLOAD_FAILED");
 		break;
 	default:
 		break;
@@ -309,10 +386,9 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 		content_name = strdup("No Name");
 
 	err = notification_set_text(noti_handle,
-			NOTIFICATION_TEXT_TYPE_TITLE, content_name,
+			NOTIFICATION_TEXT_TYPE_CONTENT, content_name,
 			NULL, NOTIFICATION_VARIABLE_TYPE_NONE);
-	if (content_name)
-		free(content_name);
+	free(content_name);
 
 	if (err != NOTIFICATION_ERROR_NONE) {
 		TRACE_ERROR("[FAIL] set title [%s]", __noti_error_str(err));
@@ -320,18 +396,34 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 		return -1;
 	}
 
-	err = notification_set_text(noti_handle,
-			NOTIFICATION_TEXT_TYPE_CONTENT,
-			__get_string_status(state), NULL,
-			NOTIFICATION_VARIABLE_TYPE_NONE);
+	err = notification_set_text(noti_handle,	NOTIFICATION_TEXT_TYPE_TITLE,
+			__get_string_status(state), NULL, NOTIFICATION_VARIABLE_TYPE_NONE);
 	if (err != NOTIFICATION_ERROR_NONE) {
-		TRACE_ERROR("[FAIL] set text [%s]", __noti_error_str(err));
+		TRACE_ERROR("[FAIL] set title [%s]", __noti_error_str(err));
 		notification_free(noti_handle);
 		return -1;
 	}
-	time_t tt = time(NULL);
+	char *url = NULL;
+	url = dp_db_get_text_column
+				(id, DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_URL);
+	if (url) {
+		char *sender_str = __get_string_sender(url);
+		err = notification_set_text(noti_handle,	NOTIFICATION_TEXT_TYPE_INFO_2,
+				sender_str, NULL, NOTIFICATION_VARIABLE_TYPE_NONE);
+		if (err != NOTIFICATION_ERROR_NONE) {
+			TRACE_ERROR("[FAIL] set title [%s]", __noti_error_str(err));
+			free(sender_str);
+			free(url);
+			notification_free(noti_handle);
+			return -1;
+		}
+		free(sender_str);
+		free(url);
+	}
 
-	err = notification_set_time(noti_handle, tt);
+	time_t tt = time(NULL);
+	err = notification_set_time_to_text(noti_handle,
+			NOTIFICATION_TEXT_TYPE_INFO_SUB_1, tt);
 	if (err != NOTIFICATION_ERROR_NONE) {
 		TRACE_ERROR("[FAIL] set time [%s]", __noti_error_str(err));
 		notification_free(noti_handle);
@@ -364,8 +456,8 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 			notification_free(noti_handle);
 			return -1;
 		}
-		if (savedpath)
-			free(savedpath);
+		free(savedpath);
+
 		err = notification_set_execute_option(noti_handle,
 				NOTIFICATION_EXECUTE_TYPE_SINGLE_LAUNCH, "View", NULL, b);
 		if (err != NOTIFICATION_ERROR_NONE) {
@@ -375,6 +467,29 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 			return -1;
 		}
 
+		long long file_size = dp_db_get_int64_column(id,
+				DP_DB_TABLE_DOWNLOAD_INFO, DP_DB_COL_CONTENT_SIZE);
+		char *size_str = __get_string_size(file_size);
+
+		err = notification_set_text(noti_handle,	NOTIFICATION_TEXT_TYPE_INFO_1,
+				size_str, NULL, NOTIFICATION_VARIABLE_TYPE_NONE);
+
+		if (err != NOTIFICATION_ERROR_NONE) {
+			TRACE_ERROR("[FAIL] set title [%s]", __noti_error_str(err));
+			free(size_str);
+			bundle_free(b);
+			notification_free(noti_handle);
+			return -1;
+		}
+		free(size_str);
+
+		err = notification_set_image(noti_handle, NOTIFICATION_IMAGE_TYPE_ICON,
+				DP_NOTIFICATION_ICON_PATH);
+		if (err != NOTIFICATION_ERROR_NONE) {
+			TRACE_ERROR("[FAIL] set icon [%s]", __noti_error_str(err));
+			notification_free(noti_handle);
+			return -1;
+		}
 	} else if (state == DP_STATE_CANCELED || state == DP_STATE_FAILED) {
 		if (__set_extra_data(b, id) < 0) {
 			bundle_free(b);
@@ -398,6 +513,14 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 			notification_free(noti_handle);
 			return -1;
 		}
+
+		err = notification_set_image(noti_handle, NOTIFICATION_IMAGE_TYPE_ICON,
+				DP_NOTIFICATION_ICON_PATH);
+		if (err != NOTIFICATION_ERROR_NONE) {
+			TRACE_ERROR("[FAIL] set icon [%s]", __noti_error_str(err));
+			notification_free(noti_handle);
+			return -1;
+		}
 	} else {
 		TRACE_ERROR("[CRITICAL] invalid state");
 		bundle_free(b);
@@ -413,14 +536,6 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 	}
 
 	bundle_free(b);
-
-	err = notification_set_image(noti_handle, NOTIFICATION_IMAGE_TYPE_ICON,
-			DP_NOTIFICATION_ICON_PATH);
-	if (err != NOTIFICATION_ERROR_NONE) {
-		TRACE_ERROR("[FAIL] set icon [%s]", __noti_error_str(err));
-		notification_free(noti_handle);
-		return -1;
-	}
 
 	err = notification_set_property(noti_handle,
 			NOTIFICATION_PROP_DISABLE_TICKERNOTI);

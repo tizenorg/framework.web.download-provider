@@ -8,6 +8,10 @@ License:    Apache License, Version 2.0
 Source0:    %{name}-%{version}.tar.gz
 Source1:    download-provider.service
 Requires(post): /usr/bin/sqlite3
+Requires(post): sys-assert
+Requires(post): libdevice-node
+Requires(post): org.tizen.indicator
+Requires(post): org.tizen.quickpanel
 BuildRequires:  cmake
 BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:  pkgconfig(gobject-2.0)
@@ -25,6 +29,7 @@ BuildRequires:  pkgconfig(notification)
 BuildRequires:  pkgconfig(appsvc)
 BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(wifi-direct)
+BuildRequires:  gettext-devel
 
 %description
 Description: download the contents in background
@@ -41,6 +46,7 @@ Description: download the contents in background (developement files)
 %setup -q
 
 %define _imagedir /usr/share/download-provider
+%define _localedir /usr/share/download-provider
 %define _databasedir /opt/usr/dbspace
 %define _databasefile %{_databasedir}/.download-provider.db
 %define _dbusservicedir /usr/share/dbus-1/services
@@ -59,6 +65,7 @@ Description: download the contents in background (developement files)
 		-DPKG_VERSION=%{version} \\\
 		-DPKG_RELEASE=%{release} \\\
 		-DIMAGE_DIR:PATH=%{_imagedir} \\\
+		-DLOCALE_DIR:PATH=%{_localedir} \\\
 		-DDATABASE_FILE:PATH=%{_databasefile} \\\
 		-DDBUS_SERVICE_DIR:PATH=%{_dbusservicedir} \\\
 		-DLICENSE_DIR:PATH=%{_licensedir} \\\
@@ -155,9 +162,10 @@ fi
 
 %files
 %defattr(-,root,root,-)
-%dir %attr(0775,root,app) /opt/data/%{name}
+%dir /opt/data/%{name}
 %manifest download-provider.manifest
 %{_imagedir}/*.png
+%{_localedir}/*
 %{_libdir}/libdownloadagent2.so.0.0.1
 %{_libdir}/libdownloadagent2.so
 %{_libdir}/systemd/user/download-provider.service

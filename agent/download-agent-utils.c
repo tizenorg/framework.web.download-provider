@@ -99,7 +99,7 @@ int read_data_from_file(char *file, char **out_buffer)
 	/* open file with "rb", because fread() handles the file as binary mode */
 	fd = fopen(file, "rb");
 	if (!fd) {
-		DA_LOG_ERR(FileManager,"File open err! received file path = [%s]", file);
+		DA_LOG_ERR(FileManager,"File open err! received file path");
 		return 0;
 	}
 
@@ -169,7 +169,7 @@ da_result_t get_available_memory(
 	avail_memory->b_size = filesys_info.f_bsize;
 
 	DA_LOG(Default, "Memory type : %d", storage_type);
-	DA_LOG_VERBOSE(Default, "Available Memory(f_bavail) : %lu", filesys_info.f_bavail);
+	DA_LOG_VERBOSE(Default, "Available Memory(f_bavail) : %llu", filesys_info.f_bavail);
 	DA_LOG_VERBOSE(Default, "Available Memory(f_bsize) : %d", filesys_info.f_bsize);
 	DA_LOG(Default, "Available Memory(kbytes) : %lu", (filesys_info.f_bavail/1024)*filesys_info.f_bsize);
 
@@ -183,10 +183,8 @@ da_mime_type_id_t get_mime_type_id(char *content_type)
 
 	DA_LOG_FUNC_START(Default);
 
-	DA_LOG(Default,"received content_type = %s", content_type);
-
 	if (content_type == NULL) {
-		DA_LOG_ERR(Default, "No Mime Type\n");
+		DA_LOG_CRITICAL(Default, "No Mime Type Id");
 		return DA_MIME_TYPE_NONE;
 	}
 
@@ -197,7 +195,7 @@ da_mime_type_id_t get_mime_type_id(char *content_type)
 		}
 		i++;
 	}
-	DA_LOG(Default, "dd mime type check: index[%d] type[%d]", i, descriptor_mime_table[i].mime_type);
+	DA_LOG_VERBOSE(Default, "dd mime type check: index[%d] type[%d]", i, descriptor_mime_table[i].mime_type);
 	return descriptor_mime_table[i].mime_type;
 }
 

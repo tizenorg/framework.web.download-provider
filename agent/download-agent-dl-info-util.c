@@ -162,9 +162,9 @@ void destroy_download_info(int slot_id)
 		dl_info->user_etag = DA_NULL;
 	}
 
-	if (dl_info->user_temp_file_path ) {
-		free(dl_info->user_temp_file_path );
-		dl_info->user_temp_file_path  = DA_NULL;
+	if (dl_info->user_temp_file_path) {
+		free(dl_info->user_temp_file_path);
+		dl_info->user_temp_file_path = DA_NULL;
 	}
 
 	dl_info->user_data = DA_NULL;
@@ -296,11 +296,13 @@ void cleanup_req_dl_info_http(req_dl_info *http_download)
 	if (http_download->http_info.http_msg_request) {
 		http_msg_request_destroy(
 		                &(http_download->http_info.http_msg_request));
+		http_download->http_info.http_msg_request = DA_NULL;
 	}
 
 	if (http_download->http_info.http_msg_response) {
 		http_msg_response_destroy(
 		                &(http_download->http_info.http_msg_response));
+		http_download->http_info.http_msg_response = DA_NULL;
 	}
 
 	if (DA_NULL != http_download->location_url) {
@@ -380,6 +382,11 @@ void clean_up_client_input_info(client_input_t *client_input)
 		if (client_input->temp_file_path) {
 			free(client_input->temp_file_path);
 			client_input->temp_file_path = DA_NULL;
+		}
+
+		if (client_input->pkg_name) {
+			free(client_input->pkg_name);
+			client_input->pkg_name = DA_NULL;
 		}
 
 		client_input_basic_t *client_input_basic =

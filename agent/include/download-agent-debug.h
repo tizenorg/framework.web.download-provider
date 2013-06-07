@@ -63,11 +63,11 @@ da_result_t init_log_mgr(void);
 	#endif /*  LOG_TAG */
 	#define LOG_TAG "DOWNLOAD_AGENT"
 
-	#define DA_LOG(channel, format, ...) LOGD_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__);
-	#define DA_LOG_CRITICAL(channel, format, ...) LOGE_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__);
-	#define DA_LOG_VERBOSE(channel, format, ...) LOGV_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__);
+	#define DA_LOG(channel, format, ...) LOGI_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__);
+	#define DA_LOG_CRITICAL(channel, format, ...) LOGI_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__);
+	#define DA_LOG_VERBOSE(channel, format, ...) LOGD_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__);
 	#define DA_LOG_ERR(channel, format, ...) LOGE_IF(IS_LOG_ON(channel), "ERR! "format, ##__VA_ARGS__);
-	#define DA_LOG_FUNC_START(channel, ...) LOGV_IF(IS_LOG_ON(channel), "starting...");
+	#define DA_LOG_FUNC_START(channel, ...) LOGD_IF(IS_LOG_ON(channel), "starting...");
 #else /* DA_DEBUG_USING_DLOG */
 	#include <unistd.h>
 	#include <syscall.h>

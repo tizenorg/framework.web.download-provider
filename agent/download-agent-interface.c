@@ -165,7 +165,8 @@ int da_start_download_with_extension(
 		DA_LOG_VERBOSE(Default, "temp_file_path = [%s]", extension_data->temp_file_path);
 	if (extension_data->etag)
 		DA_LOG_VERBOSE(Default, "etag = [%s]", extension_data->etag);
-
+	if (extension_data->pkg_name)
+		DA_LOG_VERBOSE(Default, "pkg_name = [%s]", extension_data->pkg_name);
 	if (extension_data->user_data)
 		DA_LOG_VERBOSE(Default, "user_data = [%p]", extension_data->user_data);
 

@@ -465,7 +465,7 @@ da_result_t set_http_request_hdr(stage_info *stage)
 	if (user_request_etag) {
 		DA_LOG(HTTPManager, "user_request_etag[%s]",user_request_etag);
 	} else {
-		DA_LOG_ERR(HTTPManager, "user_request_etag is NULL");
+		DA_LOG_CRITICAL(HTTPManager, "user_request_etag is NULL");
 	}
 	ret = make_default_http_request_hdr(url, user_request_header,
 		user_request_header_count, &http_msg_request,
@@ -977,9 +977,11 @@ da_result_t handle_event_http_packet(stage_info *stage, q_event_t *event)
 da_result_t handle_event_http_final(stage_info *stage, q_event_t *event)
 {
 	da_result_t ret = DA_RESULT_OK;
-
 	http_state_t http_state = 0;
 	int slot_id = DA_INVALID_ID;
+	int http_status = 0;
+	q_event_data_http_t *received_data = DA_NULL;
+
 
 	DA_LOG_FUNC_START(HTTPManager);
 
@@ -999,6 +1001,16 @@ da_result_t handle_event_http_final(stage_info *stage, q_event_t *event)
 	case HTTP_STATE_DOWNLOAD_REQUESTED:
 		DA_LOG(HTTPManager, "case HTTP_STATE_DOWNLOAD_REQUESTED");
 		CHANGE_HTTP_STATE(HTTP_STATE_DOWNLOAD_FINISH, stage);
+		/* Most of http status is decided when got headers.
+		 * But it is ignored for credential url when got headers in case of 401 status code.
+		 * So, when the download is finished, it means unauthorized error if the status code has still 401.
+		 */
+		received_data = &(event->type.q_event_data_http);
+		http_status = received_data->status_code;
+		if (http_status == 401) {
+			store_http_status(slot_id, http_status);
+			ret = DA_ERR_NETWORK_FAIL;
+		}
 		break;
 
 	case HTTP_STATE_DOWNLOADING:
@@ -1026,14 +1038,16 @@ da_result_t handle_event_http_final(stage_info *stage, q_event_t *event)
 	case HTTP_STATE_REQUEST_PAUSE:
 		if (GET_CONTENT_STORE_FILE_HANDLE(GET_STAGE_CONTENT_STORE_INFO(stage))) {
 			ret = file_write_complete(stage);
+
+			IS_CONTENT_STORE_FILE_BYTES_WRITTEN_TO_FILE(GET_STAGE_CONTENT_STORE_INFO(stage))
+					= DA_FALSE;
+
 			send_client_update_progress_info(
 					slot_id,
 					GET_DL_ID(slot_id),
 					GET_CONTENT_STORE_CURRENT_FILE_SIZE(GET_STAGE_CONTENT_STORE_INFO(stage))
 					);
 
-			IS_CONTENT_STORE_FILE_BYTES_WRITTEN_TO_FILE(GET_STAGE_CONTENT_STORE_INFO(stage))
-					= DA_FALSE;
 		}
 		CHANGE_HTTP_STATE(HTTP_STATE_PAUSED,stage);
 		CHANGE_DOWNLOAD_STATE(DOWNLOAD_STATE_PAUSED, stage);
@@ -1241,6 +1255,7 @@ da_result_t handle_http_status_code(stage_info *stage,
 			goto ERR;
 		CHANGE_HTTP_STATE(HTTP_STATE_REDIRECTED,stage);
 		http_msg_response_destroy(&http_msg_response);
+		request_info->http_info.http_msg_response = DA_NULL;
 		break;
 
 	case 100:
@@ -1360,14 +1375,15 @@ da_result_t handle_http_body(stage_info *stage, char *body, int body_len)
 			goto ERR;
 		if ((DA_TRUE ==
 				IS_CONTENT_STORE_FILE_BYTES_WRITTEN_TO_FILE(GET_STAGE_CONTENT_STORE_INFO(stage)))) {
+
+			IS_CONTENT_STORE_FILE_BYTES_WRITTEN_TO_FILE(GET_STAGE_CONTENT_STORE_INFO(stage))
+					= DA_FALSE;
 			send_client_update_progress_info(
 					slot_id,
 					GET_DL_ID(slot_id),
 					GET_CONTENT_STORE_CURRENT_FILE_SIZE(GET_STAGE_CONTENT_STORE_INFO(stage))
 					);
 
-			IS_CONTENT_STORE_FILE_BYTES_WRITTEN_TO_FILE(GET_STAGE_CONTENT_STORE_INFO(stage))
-					= DA_FALSE;
 		}
 		break;
 
@@ -1464,7 +1480,7 @@ da_result_t _check_enough_memory_for_this_download(stage_info *stage)
 
 	req_dl_info *request_info = DA_NULL;
 
-	long long cont_len = 0;
+	unsigned long long cont_len = 0;
 	da_storage_size_t memory;
 
 	DA_LOG_FUNC_START(HTTPManager);
@@ -1472,14 +1488,15 @@ da_result_t _check_enough_memory_for_this_download(stage_info *stage)
 	memset(&memory, 0x00, sizeof(da_storage_size_t));
 	request_info = GET_STAGE_TRANSACTION_INFO(stage);
 
-	cont_len = (long long) GET_REQUEST_HTTP_HDR_CONT_LEN(request_info);
+	cont_len = (unsigned long long) GET_REQUEST_HTTP_HDR_CONT_LEN(request_info);
 	if (cont_len) {
 		ret = get_available_memory(DA_STORAGE_PHONE, &memory);
 		if (DA_RESULT_OK == ret) {
-			DA_LOG(HTTPManager, "Memory avail: %lu, Memory block :%lu Content: %llu",memory.b_available,memory.b_size, cont_len);
+			DA_LOG(HTTPManager, "Memory avail: %lu, Memory block :%lu Content: %llu",
+					memory.b_available,memory.b_size, cont_len);
 			if (memory.b_available < ((cont_len
-					+ SAVE_FILE_BUFFERING_SIZE_50KB)
-					/ memory.b_size)) /* 50KB buffering */
+					+ (unsigned long long)SAVE_FILE_BUFFERING_SIZE_50KB)
+					/ (unsigned long long)memory.b_size)) /* 50KB buffering */
 			{
 				ret = DA_ERR_DISK_FULL;
 				goto ERR;

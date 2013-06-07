@@ -573,6 +573,9 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 						("[ERROR][%d] remove file", request->id);
 		}
 	}
+	char *pkg_name = dp_request_get_pkg_name(request->id, request, &errorcode);
+	if (pkg_name != NULL)
+		ext_data.pkg_name = pkg_name;
 	// get headers list from httpheaders table(DB)
 	int headers_count = dp_db_get_cond_rows_count
 			(request->id, DP_DB_TABLE_HTTP_HEADERS, NULL, 0, NULL);
@@ -608,6 +611,8 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 		free(tmp_saved_path);
 	if (etag)
 		free(etag);
+	if (pkg_name)
+		free(pkg_name);
 
 	// if start_download() return error cause of maximun download limitation,
 	// set state to DOWNLOAD_STATE_PENDED.

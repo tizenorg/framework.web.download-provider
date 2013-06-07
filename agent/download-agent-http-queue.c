@@ -366,6 +366,7 @@ void init_q_event_data_http(q_event_t *q_event)
 			q_event_data_http->status_code = DA_NULL;
 			if(q_event_data_http->http_response_msg) {
 				http_msg_response_destroy(&(q_event_data_http->http_response_msg));
+				q_event_data_http->http_response_msg = DA_NULL;
 			}
 
 			if(q_event_data_http->body_len > 0 ) {

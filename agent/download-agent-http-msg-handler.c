@@ -384,7 +384,6 @@ void __http_header_destroy_all_field(http_header_t **head)
 
 	while (cur) {
 		if (cur->field) {
-			DA_LOG_VERBOSE(HTTPManager, "field= %s", cur->field);
 			free(cur->field);
 			cur->field = DA_NULL;
 		}

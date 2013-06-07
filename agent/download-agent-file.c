@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <stdio.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <math.h>
@@ -70,7 +71,7 @@ da_result_t clean_files_from_dir(char *dir_path)
 	if (is_dir_exist(dir_path)) {
 		dir = opendir(dir_path);
 		if (DA_NULL == dir) {
-			DA_LOG_ERR(FileManager, "opendir() for %s is failed.", dir_path);
+			DA_LOG_ERR(FileManager, "opendir() is failed.");
 			ret = DA_ERR_INVALID_INSTALL_PATH;
 		} else {
 			while (DA_NULL != (d = readdir(dir))) {
@@ -175,7 +176,7 @@ da_bool_t is_dir_exist(const char *file_path)
 
 	if (stat_ret == 0) {
 		if (dir_state.st_mode & S_IFDIR) {
-			DA_LOG(FileManager, "Exist! %s is a directory.", file_path);
+			DA_LOG(FileManager, "Existed directory.");
 			return DA_TRUE;
 		}
 
@@ -266,7 +267,7 @@ da_result_t __set_file_size(stage_info *stage)
 	if (!file_storage)
 		goto ERR;
 
-	if (GET_REQUEST_HTTP_HDR_CONT_LEN(stage_req_info) != DA_NULL) {
+	if (GET_REQUEST_HTTP_HDR_CONT_LEN(stage_req_info) != 0) {
 		GET_CONTENT_STORE_FILE_SIZE(file_storage)
 				= GET_REQUEST_HTTP_HDR_CONT_LEN(stage_req_info);
 	} else {
@@ -539,7 +540,6 @@ char *get_full_path_avoided_duplication(char *in_dir, char *in_candidate_file_na
 	if (!in_dir || !in_candidate_file_name)
 		return DA_NULL;
 
-//	DA_LOG_FUNC_START(FileManager);
 	DA_LOG(FileManager, "in_candidate_file_name=[%s], in_extension=[%s]", in_candidate_file_name, in_extension);
 
 	if (extension)
@@ -720,8 +720,7 @@ da_result_t __file_write_buf_flush_buf(stage_info *stage, file_info *file_storag
 	}
 	GET_CONTENT_STORE_CURRENT_FILE_SIZE(GET_STAGE_CONTENT_STORE_INFO(stage))
 			+= write_success_len;
-	DA_LOG(FileManager, "write %d bytes", write_success_len);
-
+	DA_LOG_VERBOSE(FileManager, "write %d bytes", write_success_len);
 	IS_CONTENT_STORE_FILE_BYTES_WRITTEN_TO_FILE(file_storage) = DA_TRUE;
 	GET_CONTENT_STORE_FILE_BUFF_LEN(file_storage) = 0;
 
@@ -763,7 +762,6 @@ da_result_t __file_write_buf_directly_write(stage_info *stage,
 		ret = DA_ERR_FAIL_TO_ACCESS_FILE;
 		goto ERR;
 	}
-
 	write_success_len = fwrite(body, sizeof(char), body_len,
 			(FILE *) fd);
 	/* FIXME : This can be necessary later due to progressive download.
@@ -1150,7 +1148,7 @@ da_result_t create_dir(const char *install_dir)
 		/* read/write/search permissions for owner and group,
 		 * and with read/search permissions for others. */
 	if (mkdir(install_dir, S_IRWXU | S_IRWXG | S_IRWXO)) {
-		DA_LOG_ERR(FileManager, "Fail to creaate directory [%s]", install_dir);
+		DA_LOG_ERR(FileManager, "Fail to creaate directory");
 		ret = DA_ERR_FAIL_TO_ACCESS_STORAGE;
 	} else {
 		DA_LOG(FileManager, "[%s] is created!", install_dir);

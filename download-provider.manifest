@@ -6,7 +6,17 @@
 		</provide>
 		<request>
 			<smack request="download-provider::db" type="rw" />
+			<smack request="system::use_internet" type="w" />
+			<smack request="sys-assert::core" type="rwxat" />
+			<smack request="device::sys_logging" type="w" />
+			<smack request="system::media" type="arwxt" />
+			<smack request="system::ext_media" type="arwxt" />
 		</request>
+		<permit>
+			<smack permit="org.tizen.indicator" type="rx" />
+			<smack permit="org.tizen.quickpanel" type="rx" />
+			<smack permit="system::use_internet" type="w" />
+		</permit>
 	</define>
 	<request>
 		<domain name="download-provider" />

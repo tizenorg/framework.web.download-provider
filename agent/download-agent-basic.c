@@ -52,6 +52,7 @@ da_result_t start_download_with_extension(
 	const char *file_name = DA_NULL;
 	const char *etag = DA_NULL;
 	const char *temp_file_path = DA_NULL;
+	const char *pkg_name = DA_NULL;
 	int request_header_count = 0;
 	void *user_data = DA_NULL;
 	client_input_t *client_input = DA_NULL;
@@ -70,6 +71,7 @@ da_result_t start_download_with_extension(
 		user_data = extension_data->user_data;
 		etag = extension_data->etag;
 		temp_file_path = extension_data->temp_file_path;
+		pkg_name = extension_data->pkg_name;
 	}
 
 	ret = get_available_slot_id(&slot_id);
@@ -114,6 +116,11 @@ da_result_t start_download_with_extension(
 				strncpy(client_input->temp_file_path, temp_file_path, strlen(temp_file_path));
 		}
 
+		if (pkg_name) {
+			client_input->pkg_name = (char *)calloc(strlen(pkg_name)+1, sizeof(char));
+			if (client_input->pkg_name)
+				strncpy(client_input->pkg_name, pkg_name, strlen(pkg_name));
+		}
 		client_input_basic = &(client_input->client_input_basic);
 		client_input_basic->req_url = (char *)calloc(strlen(url)+1, sizeof(char));
 		if(DA_NULL == client_input_basic->req_url) {
@@ -311,17 +318,25 @@ static void *__thread_start_download(void *data)
 	client_input->etag = DA_NULL;
 	GET_DL_USER_TEMP_FILE_PATH(slot_id) = client_input->temp_file_path;
 	client_input->temp_file_path = DA_NULL;
+
 	ret = __make_source_info_basic_download(stage, client_input);
-	/* to save memory */
-	if (client_input) {
-		clean_up_client_input_info(client_input);
-		free(client_input);
-		client_input = DA_NULL;
-	}
 
-	if (ret == DA_RESULT_OK)
+	if (ret == DA_RESULT_OK) {
+
+
+		/* to save memory */
+		if (client_input) {
+			clean_up_client_input_info(client_input);
+			free(client_input);
+			client_input = DA_NULL;
+		}
+
 		ret = __download_content(stage);
-
+		if (stage != GET_DL_CURRENT_STAGE(slot_id)) {
+			DA_LOG_ERR(Default,"Playready download case. The next stage is present stage");
+			stage = GET_DL_CURRENT_STAGE(slot_id);
+		}
+	}
 ERR:
 	if (client_input) {
 		clean_up_client_input_info(client_input);

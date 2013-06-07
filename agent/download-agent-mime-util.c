@@ -23,13 +23,9 @@
 #include "download-agent-mime-util.h"
 #include "download-agent-pthread.h"
 
-#define IS_PROHIBITED_CHAR(c)  ((c) == ';' || (c) == '\\' || (c) == '/' || (c) == ':' || (c) == '*' || (c) == '?' || (c) == '"' || (c) == '>' || (c) == '<' || (c) == '|' || (c) == '(' || (c) == ')')
-#define IS_SPACE_CHARACTER(c)		((c) == ' ' || (c) == '\t')
+#define IS_PROHIBITED_CHAR(c)	((c) == ';' || (c) == '\\' || (c) == '/' || (c) == ':' || (c) == '*' || (c) == '?' || (c) == '"' || (c) == '>' || (c) == '<' || (c) == '|' || (c) == '(' || (c) == ')')
+#define IS_SPACE_CHARACTER(c)	((c) == ' ' || (c) == '\t')
 
-#define DD_MIME_STR "application/vnd.oma.dd+xml"
-#define DD_EXT_STR "*.dd"
-#define DRM_MIME_STR "application/vnd.oma.drm.message"
-#define DRM_EXT_STR "*.dcf"
 #define MAX_EXT_TABLE_INDEX 16
 Ext_translation_table ext_trans_table [MAX_EXT_TABLE_INDEX] = {
 		{"*.xla",			"*.xls"},
@@ -167,13 +163,14 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 	}
 
 	if (strlen(ext_temp) < 1) {
-		/* If there is no mime string for OMD descriptor mime type */
-		if (strncmp(DD_MIME_STR,mime,strlen(DD_MIME_STR)) == 0) {
+		/* If there is no mime string for OMA descriptor mime type */
+		if (strncmp(DD_MIME_STR, mime, strlen(DD_MIME_STR)) == 0) {
 			strncpy(ext_temp, DD_EXT_STR, DA_MAX_STR_LEN-1);
 			ret = DA_RESULT_OK;
 			/* If there is no extension name for "applicaion/vnd.oma.drm.messeages"
 			 *  at shared-mime-info*/
-		} else if (strncmp(DRM_MIME_STR,mime,strlen(DD_MIME_STR)) == 0) {
+		} else if (strncmp(DRM_MIME_MSG_STR, mime,
+				strlen(DRM_MIME_MSG_STR)) == 0) {
 			strncpy(ext_temp, DRM_EXT_STR, DA_MAX_STR_LEN-1);
 			/* If there is extension name at extlist, the return value can have an error.*/
 			ret = DA_RESULT_OK;

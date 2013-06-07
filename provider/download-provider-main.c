@@ -20,10 +20,14 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <pthread.h>
+#include <locale.h>
+#include <libintl.h>
 
 #ifdef DP_SUPPORT_DBUS_ACTIVATION
 #include <dbus/dbus.h>
 #endif
+
+#include "vconf.h"
 
 #include "download-provider-config.h"
 #include "download-provider-log.h"
@@ -124,6 +128,17 @@ static gboolean __dp_idle_start_service(void *data)
 	return FALSE;
 }
 
+void __set_locale()
+{
+	setlocale(LC_ALL, vconf_get_str(VCONFKEY_LANGSET));
+	bindtextdomain(PKG_NAME, LOCALE_DIR);
+	textdomain(PKG_NAME);
+}
+void __lang_changed_cb(keynode_t *key, void* data)
+{
+	__set_locale();
+}
+
 int main(int argc, char **argv)
 {
 	dp_privates *privates = NULL;
@@ -163,6 +178,11 @@ int main(int argc, char **argv)
 	}
 
 	g_type_init();
+
+	// locale
+	__set_locale();
+	if (vconf_notify_key_changed(VCONFKEY_LANGSET, __lang_changed_cb, NULL) != 0)
+		TRACE_ERROR("Fail to set language changed vconf callback");
 
 	privates = (dp_privates *) calloc(1, sizeof(dp_privates));
 	if (!privates) {
@@ -288,6 +308,8 @@ int main(int argc, char **argv)
 DOWNLOAD_EXIT :
 
 	TRACE_INFO("Download-Provider will be terminated.");
+	if (vconf_ignore_key_changed(VCONFKEY_LANGSET, __lang_changed_cb) != 0)
+		TRACE_ERROR("Fail to unset language changed vconf callback");
 
 	dp_deinit_agent();
 

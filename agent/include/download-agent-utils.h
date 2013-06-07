@@ -22,14 +22,6 @@
 #include "download-agent-interface.h"
 #include "download-agent-dl-mgr.h"
 
-/* Todo : move these to mime-util.c */
-#define MIME_DRM_MESSAGE	"application/vnd.oma.drm.message"
-#define MIME_ODF 				"application/vnd.oasis.opendocument.formula"
-#define MIME_OMA_DD 			"application/vnd.oma.dd+xml"
-#define MIME_MIDP_JAR		"application/vnd.sun.j2me.java-archive"
-#define MIME_MULTIPART_MESSAGE	"multipart/related"
-#define MIME_TEXT_PLAIN 		"text/plain"
-
 #define SAVE_FILE_BUFFERING_SIZE_50KB (50*1024)
 #define SAVE_FILE_BUFFERING_SIZE_5MB (5*1024*1024)
 

@@ -34,8 +34,6 @@ da_bool_t is_dir_exist(const char *dir_path);
 void get_file_size(char *file_path, unsigned long long *out_file_size);
 
 da_result_t clean_files_from_dir(char *dir_path);
-da_result_t create_saved_dir(void);
-
 da_result_t file_write_ongoing(stage_info *stage, char *body, int body_len);
 da_result_t file_write_complete(stage_info *stage);
 da_result_t start_file_writing(stage_info *stage);
