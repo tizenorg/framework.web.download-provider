@@ -273,6 +273,7 @@ int main(int argc, char **argv)
 		}
 	} // query crashed_list
 
+#if 0
 	if (argc != 2 || memcmp(argv[1], "service", 7) != 0) {
 		// in first launch in booting time, not request. terminate by self
 		if (dp_get_request_count(privates->requests) <= 0) {
@@ -280,6 +281,7 @@ int main(int argc, char **argv)
 			goto DOWNLOAD_EXIT;
 		}
 	}
+#endif
 
 	dp_clear_downloadinginfo_notification();
 

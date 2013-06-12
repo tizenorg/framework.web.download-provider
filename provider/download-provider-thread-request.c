@@ -1868,7 +1868,6 @@ void *dp_thread_requests_manager(void *arg)
 				//send signal to queue thread will check queue.
 				dp_thread_queue_manager_wake_up();
 			} else {
-#ifdef DP_SUPPORT_DBUS_ACTIVATION
 				// if no request & timeout is bigger than 60 sec
 				// terminate by self.
 				if ((now_timeout - prev_timeout) >= flexible_timeout &&
@@ -1876,7 +1875,6 @@ void *dp_thread_requests_manager(void *arg)
 					TRACE_INFO("No Request. Terminate Daemon");
 					break;
 				}
-#endif
 			}
 			prev_timeout = now_timeout;
 		} // timeout
