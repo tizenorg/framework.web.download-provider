@@ -1628,7 +1628,7 @@ void *dp_thread_requests_manager(void *arg)
 
 					CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 
-					if (command.cmd == DP_CMD_START && errorcode == BP_ERROR_NONE) {
+					if (command.cmd == DP_CMD_START && errorcode == DP_ERROR_NONE) {
 						//send signal to queue thread
 						dp_thread_queue_manager_wake_up();
 					}
@@ -1681,7 +1681,7 @@ void *dp_thread_requests_manager(void *arg)
 					else if (command.cmd > DP_CMD_ACTION_SECT && command.cmd < DP_CMD_GET_SECT)
 						errorcode = __dp_do_action_command(sock, &command, NULL);
 
-					if (command.cmd == DP_CMD_START && errorcode == BP_ERROR_NONE) {
+					if (command.cmd == DP_CMD_START && errorcode == DP_ERROR_NONE) {
 						//send signal to queue thread
 						dp_thread_queue_manager_wake_up();
 					}
