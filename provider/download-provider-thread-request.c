@@ -1051,8 +1051,7 @@ static dp_error_type __dp_do_set_command(int sock, dp_command* cmd, dp_request *
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
 		}
-		read_str2 = dp_ipc_read_string(sock);
-		if (read_str2 == NULL) {
+		if ((read_str2 = dp_ipc_read_string(sock)) == NULL) {
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
 		}
@@ -1336,10 +1335,7 @@ static dp_error_type __do_dp_start_command(int sock, int id, dp_privates *privat
 	}
 
 	dp_ipc_send_errorcode(sock, errorcode);
-	if (errorcode == DP_ERROR_NONE) {
-		//send signal to queue thread
-		dp_thread_queue_manager_wake_up();
-	} else {
+	if (errorcode != DP_ERROR_NONE) {
 		TRACE_SECURE_ERROR("[ERROR][%d][START][%s]", id,
 			dp_print_errorcode(errorcode));
 	}
@@ -1593,7 +1589,7 @@ void *dp_thread_requests_manager(void *arg)
 					if (privates->requests[index].request != NULL)
 						is_loaded = 1;
 					else
-						CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+						CLIENT_MUTEX_UNLOCK(&privates->requests[index].mutex);
 				}
 
 				errorcode = DP_ERROR_UNKNOWN; // check matched command
@@ -1632,6 +1628,10 @@ void *dp_thread_requests_manager(void *arg)
 
 					CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 
+					if (command.cmd == DP_CMD_START && errorcode == BP_ERROR_NONE) {
+						//send signal to queue thread
+						dp_thread_queue_manager_wake_up();
+					}
 					if (command.cmd == DP_CMD_FREE) {// enter after unlock
 						dp_request_slot_free(request_slot);
 						errorcode = DP_ERROR_NONE;
@@ -1681,6 +1681,10 @@ void *dp_thread_requests_manager(void *arg)
 					else if (command.cmd > DP_CMD_ACTION_SECT && command.cmd < DP_CMD_GET_SECT)
 						errorcode = __dp_do_action_command(sock, &command, NULL);
 
+					if (command.cmd == DP_CMD_START && errorcode == BP_ERROR_NONE) {
+						//send signal to queue thread
+						dp_thread_queue_manager_wake_up();
+					}
 				}
 
 				if (errorcode == DP_ERROR_IO_ERROR) {
