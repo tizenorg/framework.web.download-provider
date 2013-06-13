@@ -24,22 +24,17 @@
 #undef LOG_TAG
 #endif
 #define LOG_TAG "DOWNLOAD_PROVIDER"
-#define TRACE_ERROR(format, ARG...)  \
-{ \
-LOGE(format, ##ARG); \
-}
-#define TRACE_STRERROR(format, ARG...)  \
-{ \
-LOGE(format" [%s]", ##ARG, strerror(errno)); \
-}
-#define TRACE_INFO(format, ARG...)  \
-{ \
-LOGI(format, ##ARG); \
-}
+#define TRACE_ERROR(format, ARG...) LOGE(format, ##ARG)
+#define TRACE_STRERROR(format, ARG...) LOGE(format" [%s]", ##ARG, strerror(errno))
+#define TRACE_INFO(format, ARG...) LOGI(format, ##ARG)
+#define TRACE_SECURE_INFO(format, ARG...) LOGI(format, ##ARG)
+#define TRACE_SECURE_ERROR(format, ARG...) LOGE(format, ##ARG)
 #else
-#define TRACE_ERROR(format, ARG...) ;
-#define TRACE_STRERROR(format, ARG...) ;
-#define TRACE_INFO(format, ARG...) ;
+#define TRACE_ERROR(...) (0)
+#define TRACE_STRERROR(...) (0)
+#define TRACE_INFO(...) (0)
+#define TRACE_SECURE_INFO(...) (0)
+#define TRACE_SECURE_ERROR(...) (0)
 #endif
 
 #endif

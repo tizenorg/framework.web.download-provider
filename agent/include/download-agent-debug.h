@@ -50,6 +50,9 @@ da_result_t init_log_mgr(void);
 	#define DA_LOG_VERBOSE(channel, format, ...) ((void)0)
 	#define DA_LOG_ERR(channel, format, ...) ((void)0)
 	#define DA_LOG_FUNC_START(channel, ...) ((void)0)
+	#define DA_SECURE_LOGD(format, ...) ((void)0)
+	#define DA_SECURE_LOGI(format, ...) ((void)0)
+	#define DA_SECURE_LOGE(format, ...) ((void)0)
 
 #else /* NODEBUG */
 #include <stdio.h>
@@ -68,6 +71,9 @@ da_result_t init_log_mgr(void);
 	#define DA_LOG_VERBOSE(channel, format, ...) LOGD_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__);
 	#define DA_LOG_ERR(channel, format, ...) LOGE_IF(IS_LOG_ON(channel), "ERR! "format, ##__VA_ARGS__);
 	#define DA_LOG_FUNC_START(channel, ...) LOGD_IF(IS_LOG_ON(channel), "starting...");
+	#define DA_SECURE_LOGD(format, ...) LOGD(format, ##__VA_ARGS__);
+	#define DA_SECURE_LOGI(format, ...) LOGI(format, ##__VA_ARGS__);
+	#define DA_SECURE_LOGE(format, ...) LOGE(format, ##__VA_ARGS__);
 #else /* DA_DEBUG_USING_DLOG */
 	#include <unistd.h>
 	#include <syscall.h>
@@ -89,6 +95,9 @@ da_result_t init_log_mgr(void);
 	}while(0)
 	#define DA_LOG_CRITICAL DA_LOG
 	#define DA_LOG_VERBOSE DA_LOG
+	#define DA_SECURE_LOGD(format, ...) ;
+	#define DA_SECURE_LOGI(format, ...) ;
+	#define DA_SECURE_LOGE(format, ...) ;
 #endif /* DA_DEBUG_USING_DLOG */
 #endif /* NDEBUG */
 #endif /* _Download_Agent_Debug_H */

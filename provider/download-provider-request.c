@@ -337,7 +337,7 @@ dp_error_type dp_request_set_filename(int id, dp_request *request, char *filenam
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
 
-	TRACE_INFO("ID [%d] Filename[%s]", id, filename);
+	TRACE_SECURE_INFO("ID [%d] Filename[%s]", id, filename);
 	return DP_ERROR_NONE;
 }
 

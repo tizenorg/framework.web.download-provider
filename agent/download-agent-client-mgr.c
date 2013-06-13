@@ -270,8 +270,8 @@ da_result_t  send_client_update_dl_info (
 
 	if (etag)
 		update_dl_info->etag = strdup(etag);
-	DA_LOG(ClientNoti, "pushing file_size=%lu, slot_id=%d, dl_id=%d",
-			file_size, slot_id, dl_id);
+	DA_LOG(ClientNoti, "pushing slot_id=%d, dl_id=%d", slot_id, dl_id);
+	DA_SECURE_LOGD("pushing file_size=%lu", file_size);
 
 	push_client_noti(client_noti);
 
@@ -315,11 +315,11 @@ da_result_t  send_client_finished_info (
 
 	if (saved_path) {
 		finished_info->saved_path = strdup(saved_path);
-		DA_LOG(ClientNoti, "saved path=%s", saved_path);
+		DA_SECURE_LOGD("saved path=%s", saved_path);
 	}
 	if (etag) {
 		finished_info->etag = strdup(etag);
-		DA_LOG(ClientNoti, "pushing finished info. etag[%s]", etag);
+		DA_SECURE_LOGD("pushing finished info. etag[%s]", etag);
 	}
 	DA_LOG(ClientNoti, "user_data=%p", client_noti->user_data);
 	DA_LOG(ClientNoti, "http_status=%d", http_status);
@@ -540,11 +540,11 @@ static void *__thread_for_client_noti(void *data)
 					if (client_app_mgr.client_app_info.client_callback.update_dl_info_cb) {
 						client_app_mgr.client_app_info.client_callback.update_dl_info_cb(update_dl_info, client_noti->user_data);
 						if (update_dl_info->etag)
-							DA_LOG(ClientNoti, "Etag:[%s]", update_dl_info->etag);
-						DA_LOG(ClientNoti, "Update download info for slot_id=%d, dl_id=%d, received size=%lu- DONE",
+							DA_SECURE_LOGD("Etag:[%s]", update_dl_info->etag);
+						DA_SECURE_LOGD("file size=%lu", update_dl_info->file_size);
+						DA_LOG(ClientNoti, "Update download info for slot_id=%d, dl_id=%d- DONE",
 								client_noti->slot_id,
-								update_dl_info->download_id,
-								update_dl_info->file_size
+								update_dl_info->download_id
 								);
 					}
 				}
@@ -569,14 +569,16 @@ static void *__thread_for_client_noti(void *data)
 					if (client_app_mgr.client_app_info.client_callback.finished_info_cb) {
 						client_app_mgr.client_app_info.client_callback.finished_info_cb(
 							finished_info, client_noti->user_data);
-						DA_LOG(ClientNoti, "Completed info for slot_id=%d, dl_id=%d, saved_path=%s etag=%s err=%d http_state=%d user_data=%p- DONE",
+						DA_LOG(ClientNoti, "Completed info for slot_id=%d, dl_id=%d, err=%d http_state=%d user_data=%p- DONE",
 								client_noti->slot_id,
 								finished_info->download_id,
-								finished_info->saved_path,
-								finished_info->etag,
 								finished_info->err,
 								finished_info->http_status,
 								client_noti->user_data);
+						DA_SECURE_LOGD("Completed info for saved_path=%s etag=%s - DONE",
+								finished_info->saved_path,
+								finished_info->etag);
+
 					}
 				}
 				break;

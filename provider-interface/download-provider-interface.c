@@ -86,10 +86,20 @@ LOGE(format" [%s]", ##ARG, strerror(errno)); \
 { \
 LOGI(format, ##ARG); \
 }
+#define TRACE_SECURE_INFO(format, ARG...)  \
+{ \
+LOGI(format, ##ARG); \
+}
+#define TRACE_SECURE_ERROR(format, ARG...)  \
+{ \
+LOGE(format, ##ARG); \
+}
 #else
 #define TRACE_ERROR(format, ARG...) ;
 #define TRACE_STRERROR(format, ARG...) ;
 #define TRACE_INFO(format, ARG...) ;
+#define TRACE_SECURE_INFO(format, ARG...) ;
+#define TRACE_SECURE_ERROR(format, ARG...) ;
 #endif
 
 // define type
@@ -1513,7 +1523,7 @@ int dp_interface_get_notification_extra_param(const int id, char **key,
 
 	*key = key_str;
 	*value = value_str;
-	TRACE_INFO("ID : %d key : %s value : %s", id, *key, *value);
+	TRACE_SECURE_INFO("ID : %d key : %s value : %s", id, *key, *value);
 	pthread_mutex_unlock(&g_function_mutex);
 #endif
 	return DOWNLOAD_ADAPTOR_ERROR_NONE;
@@ -1619,7 +1629,7 @@ int dp_interface_get_http_header_field(const int id, const char *field,
 		str = __ipc_read_string(g_interface_info->cmd_socket);
 		if (str != NULL) {
 			*value = str;
-			TRACE_INFO("ID : %d field:%s value: %s", id, field, *value);
+			TRACE_SECURE_INFO("ID : %d field:%s value: %s", id, field, *value);
 		} else {
 			errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
 		}

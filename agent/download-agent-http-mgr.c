@@ -463,7 +463,7 @@ da_result_t set_http_request_hdr(stage_info *stage)
 	user_request_temp_file_path = GET_REQUEST_HTTP_USER_REQUEST_TEMP_FILE_PATH(
 				request_info);
 	if (user_request_etag) {
-		DA_LOG(HTTPManager, "user_request_etag[%s]",user_request_etag);
+		DA_SECURE_LOGD("user_request_etag[%s]",user_request_etag);
 	} else {
 		DA_LOG_CRITICAL(HTTPManager, "user_request_etag is NULL");
 	}
@@ -555,7 +555,7 @@ da_result_t make_req_dl_info_http(stage_info *stage, req_dl_info *out_info)
 	user_request_etag = GET_DL_USER_ETAG(GET_STAGE_DL_ID(stage));
 	user_request_temp_file_path = GET_DL_USER_TEMP_FILE_PATH(GET_STAGE_DL_ID(stage));
 
-	DA_LOG(HTTPManager, "url [%s]", url);
+	DA_SECURE_LOGD("url [%s]", url);
 
 	if (url) {
 		GET_REQUEST_HTTP_REQ_URL(out_info) = url;
@@ -784,14 +784,14 @@ da_result_t create_resume_http_request_hdr(stage_info *stage,
 		if (b_ret) {
 			etag_from_response = value;
 			value = NULL;
-			DA_LOG(HTTPManager, "[ETag][%s]", etag_from_response);
+			DA_SECURE_LOGD("[ETag][%s]", etag_from_response);
 		}
 
 		b_ret = http_msg_response_get_date(first_response, &value);
 		if (b_ret) {
 			date_from_response = value;
 			value = NULL;
-			DA_LOG(HTTPManager, "[Date][%s]", date_from_response);
+			DA_SECURE_LOGD("[Date][%s]", date_from_response);
 		}
 
 		downloaded_data_size
@@ -1290,7 +1290,7 @@ da_result_t exchange_url_from_header_for_redirection(stage_info *stage,
 	DA_LOG_FUNC_START(HTTPManager);
 
 	if (http_msg_response_get_location(http_msg_response, &location)) {
-		DA_LOG(HTTPManager, "location  = %s\n", location);
+		DA_SECURE_LOGD("location  = %s\n", location);
 		GET_REQUEST_HTTP_REQ_LOCATION(GET_STAGE_TRANSACTION_INFO(stage)) = location;
 	}
 
@@ -1431,7 +1431,7 @@ da_result_t set_hdr_fields_on_download_info(stage_info *stage)
 	if (b_ret) {
 		GET_REQUEST_HTTP_HDR_CONT_TYPE(request_info) = value;
 		value = NULL;
-		DA_LOG_VERBOSE(HTTPManager, "[Content-Type][%s] - stored", GET_REQUEST_HTTP_HDR_CONT_TYPE(request_info));
+		DA_SECURE_LOGD("[Content-Type][%s] - stored", GET_REQUEST_HTTP_HDR_CONT_TYPE(request_info));
 	}
 
 	b_ret = http_msg_response_get_content_length(http_msg_response,
@@ -1439,14 +1439,14 @@ da_result_t set_hdr_fields_on_download_info(stage_info *stage)
 	if (b_ret) {
 		GET_REQUEST_HTTP_HDR_CONT_LEN(request_info) = size;
 		size = 0;
-		DA_LOG_VERBOSE(HTTPManager, "[Content-Length][%d] - stored", GET_REQUEST_HTTP_HDR_CONT_LEN(request_info));
+		DA_SECURE_LOGD("[Content-Length][%llu] - stored", GET_REQUEST_HTTP_HDR_CONT_LEN(request_info));
 	}
 
 	b_ret = http_msg_response_get_ETag(http_msg_response, &value);
 	if (b_ret) {
 		GET_REQUEST_HTTP_HDR_ETAG(request_info) = value;
 		value = NULL;
-		DA_LOG_VERBOSE(HTTPManager, "[ETag][%s] - stored ", GET_REQUEST_HTTP_HDR_ETAG(request_info));
+		DA_SECURE_LOGD("[ETag][%s] - stored ", GET_REQUEST_HTTP_HDR_ETAG(request_info));
 	}
 
 ERR:
@@ -1537,7 +1537,7 @@ da_result_t _check_this_partial_download_is_available(stage_info *stage,
 	if (b_ret) {
 		new_ETag = value;
 		value = NULL;
-		DA_LOG(HTTPManager, "[new ETag][%s]", new_ETag);
+		DA_SECURE_LOGD("[new ETag][%s]", new_ETag);
 	} else {
 		goto ERR;
 	}
@@ -1607,7 +1607,7 @@ da_result_t _check_resume_download_is_available(stage_info *stage,
 	if (b_ret) {
 		new_ETag = value;
 		value = NULL;
-		DA_LOG(HTTPManager, "[new ETag][%s]", new_ETag);
+		DA_SECURE_LOGD("[new ETag][%s]", new_ETag);
 	} else {
 		goto ERR;
 	}
@@ -1639,13 +1639,13 @@ da_result_t _check_resume_download_is_available(stage_info *stage,
 	if (b_ret) {
 		GET_REQUEST_HTTP_HDR_CONT_TYPE(request_info) = value;
 		value = NULL;
-		DA_LOG(HTTPManager, "[Content-Type][%s]",
+		DA_SECURE_LOGD("[Content-Type][%s]",
 				GET_REQUEST_HTTP_HDR_CONT_TYPE(request_info));
 	}
 	temp_file_path = GET_REQUEST_HTTP_USER_REQUEST_TEMP_FILE_PATH(request_info);
 	get_file_size(temp_file_path, &size);
 	GET_REQUEST_HTTP_HDR_CONT_LEN(request_info) =	remained_content_len + size;
-	DA_LOG(HTTPManager, "[Content-Length][%d]",
+	DA_SECURE_LOGD("[Content-Length][%llu]",
 			GET_REQUEST_HTTP_HDR_CONT_LEN(request_info));
 
 
@@ -1688,7 +1688,8 @@ da_result_t _check_downloaded_file_size_is_same_with_header_content_size(
 
 		if (content_size_from_real_file
 				!= content_size_from_http_header) {
-			DA_LOG_ERR(HTTPManager, "size from header = %llu, real size = %llu, DA_ERR_MISMATCH_CONTENT_SIZE",
+			DA_SECURE_LOGE("size from header = %llu, real size = %llu,\
+					DA_ERR_MISMATCH_CONTENT_SIZE",
 					content_size_from_http_header, content_size_from_real_file);
 			ret = DA_ERR_MISMATCH_CONTENT_SIZE;
 		}
@@ -1800,7 +1801,7 @@ void __parsing_user_request_header(char *user_request_header,
 	strncpy(value, pos, len);
 	*out_field = field;
 	*out_value = value;
-	DA_LOG(HTTPManager, "field[%s], value[%s]", field, value);
+	DA_SECURE_LOGD("field[%s], value[%s]", field, value);
 
 	return;
 ERR:

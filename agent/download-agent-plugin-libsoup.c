@@ -53,7 +53,7 @@ da_result_t _set_proxy_on_soup_session(SoupSession *session, char *proxy_addr)
 
 
 	if (proxy_addr && strlen(proxy_addr) > 0) {
-		DA_LOG_CRITICAL(HTTPManager,"received proxy = %s \n", proxy_addr);
+		DA_SECURE_LOGD("received proxy = %s \n", proxy_addr);
 		if (!strstr(proxy_addr, "0.0.0.0")) {
 			if (strstr((const char *)proxy_addr, "http") == DA_NULL) {
 				/* DA_LOG(Default,"There is no \"http://\" on received uri, so, add it."); */
@@ -107,7 +107,7 @@ void _fill_soup_msg_header(SoupMessage *msg,
 	http_msg_iter_pre = http_msg_iter;
 	while (http_msg_get_field_with_iter(&http_msg_iter, &field, &value)) {
 		if ((field != DA_NULL) && (value != DA_NULL)) {
-			DA_LOG(HTTPManager,"[%s] %s", field, value);
+			DA_SECURE_LOGD("[%s] %s", field, value);
 			soup_message_headers_append(headers, field, value);
 		}
 		http_msg_iter_pre = http_msg_iter;
@@ -886,7 +886,7 @@ void _pi_http_finished_cb(SoupSession *session, SoupMessage *msg, gpointer data)
 
 	url = soup_uri_to_string(soup_message_get_uri(msg), DA_FALSE);
 
-	DA_LOG(HTTPManager,"status_code[%d], reason[%s], url[%s]",msg->status_code,msg->reason_phrase,url);
+	DA_SECURE_LOGD("status_code[%d], reason[%s], url[%s]",msg->status_code,msg->reason_phrase,url);
 
 	if (url) {
 		free(url);

@@ -246,7 +246,7 @@ da_result_t __make_source_info_basic_download(
 
 	source_info->source_info_type.source_info_basic = source_info_basic;
 
-	DA_LOG(Default, "BASIC HTTP STARTED: URL=%s",
+	DA_SECURE_LOGI("BASIC HTTP STARTED: URL=%s",
 			source_info->source_info_type.source_info_basic->url);
 ERR:
 	return ret;

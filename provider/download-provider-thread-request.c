@@ -276,7 +276,7 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 		}
 
 		// disconnect the request from group.
-		TRACE_INFO("[DISCONNECT][%d] state:%s pkg:%s sock:%d",
+		TRACE_SECURE_INFO("[DISCONNECT][%d] state:%s pkg:%s sock:%d",
 			request->id, dp_print_state(request->state),
 			request->group->pkgname, request->group->cmd_socket);
 		request->group = NULL;
@@ -331,7 +331,7 @@ static void __dp_remove_tmpfile(int id, dp_request *request)
 	if (errorcode == DP_ERROR_NONE &&
 			(path != NULL && strlen(path) > 0) &&
 			dp_is_file_exist(path) == 0) {
-		TRACE_INFO("[REMOVE][%d] TEMP FILE [%s]", id, path);
+		TRACE_SECURE_INFO("[REMOVE][%d] TEMP FILE [%s]", id, path);
 		if (unlink(path) != 0)
 			TRACE_STRERROR("[ERROR][%d] remove file", id);
 	}
@@ -386,7 +386,7 @@ static int __dp_add_extra_param(int fd, int id)
 				ret = DP_ERROR_IO_ERROR;
 			} else {
 				if (length > 1) {
-					TRACE_INFO("[RECV] key : %s", key);
+					TRACE_SECURE_INFO("[RECV] key : %s", key);
 					// get values
 					values = (char **)calloc((length - 1), sizeof(char *));
 					if (values == NULL) {
@@ -538,12 +538,13 @@ static int __dp_remove_extra_param(int fd, int id)
 	if (ret == DP_ERROR_NONE) {
 		if (dp_db_cond_remove(id, DP_DB_TABLE_NOTIFICATION,
 				DP_DB_COL_EXTRA_KEY, DP_DB_COL_TYPE_TEXT, key) < 0) {
-			TRACE_ERROR("[fail][%d][sql] set key:%s", id, key);
+			TRACE_ERROR("[fail][%d][sql]", id);
+			TRACE_SECURE_ERROR("[fail]key:%s", key);
 			ret = DP_ERROR_OUT_OF_MEMORY;
 		}
 	}
-	TRACE_ERROR
-		("[ERROR][%d][%s] key:%s", id, dp_print_errorcode(ret), key);
+	TRACE_INFO("[ERROR][%d][%s]", id, dp_print_errorcode(ret));
+	TRACE_SECURE_INFO("key:%s", key);
 	free(key);
 	return ret;
 }
@@ -619,7 +620,7 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 	// getting the package name via pid
 	if (app_manager_get_package(credential.pid, &pkgname) ==
 			APP_MANAGER_ERROR_NONE) {
-		TRACE_INFO("package : %s", pkgname);
+		TRACE_SECURE_INFO("package : %s", pkgname);
 	} else
 		TRACE_ERROR("[CRITICAL] app_manager_get_package");
 
@@ -652,7 +653,7 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 					strncmp(groups[i].group->pkgname, pkgname,
 						pkg_len) == 0 ) {
 				// Found Same Group
-				TRACE_INFO("UPDATE Group: slot:%d pid:%d sock:%d [%s]",
+				TRACE_SECURE_INFO("UPDATE Group: slot:%d pid:%d sock:%d [%s]",
 					i, credential.pid, clientfd, pkgname);
 				if (groups[i].group->cmd_socket > 0 &&
 						groups[i].group->cmd_socket != clientfd) {
@@ -692,7 +693,7 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 	groups[i].group->credential.pid = credential.pid;
 	groups[i].group->credential.uid = credential.uid;
 	groups[i].group->credential.gid = credential.gid;
-	TRACE_INFO("New Group: slot:%d pid:%d sock:%d [%s]", i,
+	TRACE_SECURE_INFO("New Group: slot:%d pid:%d sock:%d [%s]", i,
 		credential.pid, clientfd, pkgname);
 	free(pkgname);
 	return 0;
@@ -713,7 +714,7 @@ static int __dp_set_group_event_sock(int clientfd,
 					groups[i].group->event_socket != clientfd)
 				dp_socket_free(groups[i].group->event_socket);
 			groups[i].group->event_socket = clientfd;
-			TRACE_INFO
+			TRACE_SECURE_INFO
 				("Found Group : slot:%d pid:%d csock:%d esock:%d [%s]",
 					i, credential.pid, groups[i].group->cmd_socket,
 					clientfd, groups[i].group->pkgname);
@@ -1507,7 +1508,7 @@ void *dp_thread_requests_manager(void *arg)
 				}
 
 				if (command.cmd == 0 || command.cmd >= DP_CMD_LAST_SECT) { // Client meet some Error.
-					TRACE_INFO("[Closed Peer] pkg:%s sock:%d slot:%d",
+					TRACE_SECURE_INFO("[Closed Peer] pkg:%s sock:%d slot:%d",
 						group->pkgname, sock, i);
 					// check all request included to this group
 					FD_CLR(sock, &listen_fdset);
@@ -1531,7 +1532,7 @@ void *dp_thread_requests_manager(void *arg)
 				}
 
 				if (command.cmd == DP_CMD_CREATE) {
-					TRACE_INFO("[CREATE] id:%d sock:%d pid:%d gindex:%d pkg:%s",
+					TRACE_SECURE_INFO("[CREATE] id:%d sock:%d pid:%d gindex:%d pkg:%s",
 						command.id, sock,
 						group->credential.pid, i, group->pkgname);
 					// search empty slot in privates->requests
@@ -1597,7 +1598,7 @@ void *dp_thread_requests_manager(void *arg)
 				// divide on memory or from DB
 				if (is_loaded == 1 && index >= 0) { // already locked
 
-					TRACE_INFO("[%s] id:%d sock:%d pid:%d gindex:%d slot:%d pkg:%s",
+					TRACE_SECURE_INFO("[%s] id:%d sock:%d pid:%d gindex:%d slot:%d pkg:%s",
 						__print_command(command.cmd), command.id, sock,
 						group->credential.pid, i, index, group->pkgname);
 
@@ -1605,7 +1606,7 @@ void *dp_thread_requests_manager(void *arg)
 
 					// auth by pkgname
 					if (__cmp_string(group->pkgname, request_slot->request->packagename) < 0) {
-						TRACE_ERROR("[ERROR][%d] Auth [%s]/[%s]",
+						TRACE_SECURE_ERROR("[ERROR][%d] Auth [%s]/[%s]",
 							command.id, group->pkgname, request_slot->request->packagename);
 						TRACE_ERROR("[ERROR][%d][INVALID_PARAMETER]", command.id);
 						dp_ipc_send_errorcode(sock, DP_ERROR_INVALID_PARAMETER);
@@ -1639,7 +1640,7 @@ void *dp_thread_requests_manager(void *arg)
 
 				} else { // not found on the slots
 
-					TRACE_INFO("[%s] id:%d sock:%d pid:%d gindex:%d slot:no pkg:%s",
+					TRACE_SECURE_INFO("[%s] id:%d sock:%d pid:%d gindex:%d slot:no pkg:%s",
 						__print_command(command.cmd), command.id, sock,
 						group->credential.pid, i, group->pkgname);
 
@@ -1661,7 +1662,7 @@ void *dp_thread_requests_manager(void *arg)
 					}
 					// auth by pkgname
 					if (__cmp_string(group->pkgname, auth_pkgname) < 0) {
-						TRACE_ERROR("[ERROR][%d] Auth [%s]/[%s]",
+						TRACE_SECURE_ERROR("[ERROR][%d] Auth [%s]/[%s]",
 							command.id, group->pkgname, auth_pkgname);
 						TRACE_ERROR("[ERROR][%d][INVALID_PARAMETER]", command.id);
 						dp_ipc_send_errorcode(sock, DP_ERROR_INVALID_PARAMETER);

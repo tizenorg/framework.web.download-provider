@@ -55,7 +55,6 @@ static da_result_t __file_write_buf_copy_to_buf(file_info *file_storage,
 static da_result_t __file_write_buf_directly_write(stage_info *stage,
 		file_info *file_storage, char *body, int body_len);
 
-
 da_result_t clean_files_from_dir(char *dir_path)
 {
 	da_result_t ret = DA_RESULT_OK;
@@ -75,7 +74,7 @@ da_result_t clean_files_from_dir(char *dir_path)
 			ret = DA_ERR_INVALID_INSTALL_PATH;
 		} else {
 			while (DA_NULL != (d = readdir(dir))) {
-				DA_LOG(FileManager, "%s",d->d_name);
+				DA_SECURE_LOGD("%s",d->d_name);
 				if (0 == strncmp(d->d_name, ".", strlen("."))
 						|| 0 == strncmp(d->d_name,
 								"..",
@@ -115,7 +114,7 @@ da_result_t get_mime_type(stage_info *stage, char **out_mime_type)
 	/* Priority 1 */
 	if (GET_REQUEST_HTTP_HDR_CONT_TYPE(GET_STAGE_TRANSACTION_INFO(stage))) {
 		mime_type = GET_REQUEST_HTTP_HDR_CONT_TYPE(GET_STAGE_TRANSACTION_INFO(stage));
-		 DA_LOG(FileManager, "content type from HTTP response header [%s]", mime_type);
+		DA_SECURE_LOGI("content type from HTTP response header [%s]", mime_type);
 	}
 
 	if (!mime_type) {
@@ -127,14 +126,14 @@ da_result_t get_mime_type(stage_info *stage, char **out_mime_type)
 	*out_mime_type = (char *)calloc(1, strlen(mime_type) + 1);
 	if (*out_mime_type) {
 		strncpy(*out_mime_type, mime_type, strlen(mime_type));
-		DA_LOG_VERBOSE(FileManager, "out_mime_type str[%s] ptr[%p] len[%d]",
+		DA_SECURE_LOGD("out_mime_type str[%s] ptr[%p] len[%d]",
 				*out_mime_type,*out_mime_type,strlen(*out_mime_type));
 	} else {
 		DA_LOG_ERR(FileManager, "fail to allocate memory");
 		return DA_ERR_FAIL_TO_MEMALLOC;
 	}
 
-	DA_LOG(FileManager, "mime type = %s", *out_mime_type);
+	DA_SECURE_LOGD("mime type = %s", *out_mime_type);
 	return DA_RESULT_OK;
 }
 
@@ -152,7 +151,7 @@ da_bool_t is_file_exist(const char *file_path)
 
 	if (stat_ret == 0) {
 		if (dir_state.st_mode & S_IFREG) {
-			DA_LOG(FileManager, "Exist! %s is a regular file & its size = %lu", file_path, dir_state.st_size);
+			DA_SECURE_LOGD("Exist! %s is a regular file & its size = %lu", file_path, dir_state.st_size);
 			return DA_TRUE;
 		}
 
@@ -225,10 +224,9 @@ da_result_t __saved_file_open(stage_info *stage)
 		return DA_ERR_INVALID_ARGUMENT;
 
 	actual_file_path = GET_CONTENT_STORE_ACTUAL_FILE_NAME(file_storage);
-	DA_LOG(FileManager, "actual_file_path = %s", actual_file_path);
+	DA_SECURE_LOGD("actual_file_path = %s", actual_file_path);
 	if (!actual_file_path)
 		return DA_ERR_INVALID_ARGUMENT;
-
 
 	fd = fopen(actual_file_path, "a+"); // for resume
 	if (fd == DA_NULL) {
@@ -238,7 +236,7 @@ da_result_t __saved_file_open(stage_info *stage)
 	}
 	GET_CONTENT_STORE_FILE_HANDLE(file_storage) = fd;
 
-	DA_LOG(FileManager, "file path for saving = %s",
+	DA_SECURE_LOGD("file path for saving = %s",
 			GET_CONTENT_STORE_ACTUAL_FILE_NAME(file_storage));
 
 ERR:
@@ -316,7 +314,7 @@ char *__derive_extension(stage_info *stage)
 				DA_NULL, &file_name);
 		if (b_ret && file_name) {
 			char *extension = DA_NULL;
-			DA_LOG(FileManager, "Name from Content-Disposition :[%s]", file_name);
+			DA_SECURE_LOGD("Name from Content-Disposition :[%s]", file_name);
 			__divide_file_name_into_pure_name_N_extesion(file_name, DA_NULL, &extension);
 				if (file_name) {
 				free(file_name);
@@ -334,7 +332,7 @@ char *__derive_extension(stage_info *stage)
 	else
 		url = GET_SOURCE_BASIC_URL(source_info);
 	if (url) {
-		DA_LOG(FileManager, "url:[%s]", url);
+		DA_SECURE_LOGD("url:[%s]", url);
 		da_bool_t b_ret = da_get_extension_name_from_url(url, &extension);
 		if (b_ret && extension)
 			return extension;
@@ -382,7 +380,7 @@ da_result_t __get_candidate_file_name(stage_info *stage, char **out_pure_file_na
 			da_bool_t b_ret = http_msg_response_get_content_disposition(http_msg_response,
 					DA_NULL, &file_name);
 			if (b_ret && file_name) {
-				DA_LOG(FileManager, "Name from Content-Disposition :[%s]", file_name);
+				DA_SECURE_LOGD("Name from Content-Disposition :[%s]", file_name);
 				__divide_file_name_into_pure_name_N_extesion(file_name, &pure_file_name, DA_NULL);
 				if (file_name) {
 					free(file_name);
@@ -403,7 +401,7 @@ da_result_t __get_candidate_file_name(stage_info *stage, char **out_pure_file_na
 		else
 			url = GET_SOURCE_BASIC_URL(source_info);
 		if (url) {
-			DA_LOG(FileManager, "url: [%s]", url);
+			DA_SECURE_LOGD("url: [%s]", url);
 			da_get_file_name_from_url(url, &pure_file_name);
 		}
 	}
@@ -419,7 +417,7 @@ da_result_t __get_candidate_file_name(stage_info *stage, char **out_pure_file_na
 
 	*out_pure_file_name = pure_file_name;
 	pure_file_name = DA_NULL;
-	DA_LOG(FileManager, "candidate file name [%s]", *out_pure_file_name);
+	DA_SECURE_LOGD("candidate file name [%s]", *out_pure_file_name);
 
 	if (out_extension) {
 		if (extension) {
@@ -427,7 +425,7 @@ da_result_t __get_candidate_file_name(stage_info *stage, char **out_pure_file_na
 			extension = DA_NULL;
 		} else {
 			*out_extension = __derive_extension(stage);
-			DA_LOG(FileManager, "candidate extension [%s]", *out_extension);
+			DA_SECURE_LOGD("candidate extension [%s]", *out_extension);
 		}
 	}
 
@@ -507,7 +505,7 @@ da_result_t __decide_file_path(stage_info *stage)
 	}
 
 ERR:
-	DA_LOG(FileManager, "decided file path = %s", GET_CONTENT_STORE_ACTUAL_FILE_NAME(file_info_data));
+	DA_SECURE_LOGD("decided file path = %s", GET_CONTENT_STORE_ACTUAL_FILE_NAME(file_info_data));
 	if (temp_dir) {
 		free(temp_dir);
 		temp_dir = DA_NULL;
@@ -540,7 +538,7 @@ char *get_full_path_avoided_duplication(char *in_dir, char *in_candidate_file_na
 	if (!in_dir || !in_candidate_file_name)
 		return DA_NULL;
 
-	DA_LOG(FileManager, "in_candidate_file_name=[%s], in_extension=[%s]", in_candidate_file_name, in_extension);
+	DA_SECURE_LOGD("in_candidate_file_name=[%s], in_extension=[%s]", in_candidate_file_name, in_extension);
 
 	if (extension)
 		extension_len = strlen(extension);
@@ -592,7 +590,7 @@ char *get_full_path_avoided_duplication(char *in_dir, char *in_candidate_file_na
 		break;
 	} while (1);
 
-	DA_LOG(FileManager, "decided path = [%s]", final_path);
+	DA_SECURE_LOGD("decided path = [%s]", final_path);
 	return final_path;
 }
 
@@ -617,7 +615,7 @@ da_result_t __divide_file_name_into_pure_name_N_extesion(const char *in_file_nam
 	if (tmp_ptr && out_extension) {
 		strncpy((char*) tmp_ext, tmp_ptr, sizeof(tmp_ext) - 1);
 		*out_extension = strdup((const char*) tmp_ext);
-		DA_LOG(FileManager, "extension [%s]", *out_extension);
+		DA_SECURE_LOGD("extension [%s]", *out_extension);
 	}
 
 	if (!out_pure_file_name)
@@ -644,7 +642,7 @@ da_result_t __divide_file_name_into_pure_name_N_extesion(const char *in_file_nam
 				(const char*) temp_file);
 	}
 
-	DA_LOG(FileManager, "pure file name [%s]", *out_pure_file_name);
+	DA_SECURE_LOGD("pure file name [%s]", *out_pure_file_name);
 	return ret;
 }
 
@@ -707,7 +705,6 @@ da_result_t __file_write_buf_flush_buf(stage_info *stage, file_info *file_storag
 		ret = DA_ERR_FAIL_TO_ACCESS_FILE;
 		goto ERR;
 	}
-
 	write_success_len = fwrite(buffer, sizeof(char), buffer_size,
 			(FILE *) fd);
 	/* FIXME : This can be necessary later due to progressive download.
@@ -1151,7 +1148,7 @@ da_result_t create_dir(const char *install_dir)
 		DA_LOG_ERR(FileManager, "Fail to creaate directory");
 		ret = DA_ERR_FAIL_TO_ACCESS_STORAGE;
 	} else {
-		DA_LOG(FileManager, "[%s] is created!", install_dir);
+		DA_SECURE_LOGD("[%s] is created!", install_dir);
 		if (chown(install_dir, 5000, 5000) < 0) {
 			DA_LOG_ERR(FileManager, "Fail to chown");
 			ret = DA_ERR_FAIL_TO_ACCESS_STORAGE;
@@ -1182,7 +1179,7 @@ da_result_t get_default_dir(char **out_path)
 
 	*out_path = tmp_default_path;
 
-	DA_LOG_VERBOSE(FileManager, "default temp path = [%s]", *out_path);
+	DA_SECURE_LOGD("default temp path = [%s]", *out_path);
 
 	return DA_RESULT_OK;
 }
@@ -1221,6 +1218,6 @@ da_result_t get_default_install_dir(char **out_path)
 	if (!is_dir_exist(default_path)) {
 		ret = create_dir(default_path);
 	}
-	DA_LOG_VERBOSE(FileManager, "default temp path = [%s]", *out_path);
+	DA_SECURE_LOGD("default temp path = [%s]", *out_path);
 	return DA_RESULT_OK;
 }

@@ -143,12 +143,12 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 
 	// update info before sending event
 	if (info->tmp_saved_path) {
-		TRACE_INFO("[STARTED][%d] [%s]", request_id, info->tmp_saved_path);
+		TRACE_SECURE_INFO("[STARTED][%d] [%s]", request_id, info->tmp_saved_path);
 		if (dp_db_replace_column(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
 				DP_DB_COL_TMP_SAVED_PATH, DP_DB_COL_TYPE_TEXT,
 				info->tmp_saved_path) == 0) {
 			if (info->file_type) {
-				TRACE_INFO("[MIME-TYPE][%d] [%s]", request_id, info->file_type);
+				TRACE_SECURE_INFO("[MIME-TYPE][%d] [%s]", request_id, info->file_type);
 				if (dp_db_set_column(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
 						DP_DB_COL_MIMETYPE, DP_DB_COL_TYPE_TEXT,
 						info->file_type) < 0)
@@ -156,7 +156,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 			}
 
 			if (info->file_size > 0) {
-				TRACE_INFO
+				TRACE_SECURE_INFO
 					("[FILE-SIZE][%d] [%lld]", request_id, info->file_size);
 				request->file_size = info->file_size;
 				if (dp_db_set_column
@@ -167,7 +167,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 			}
 
 			if (info->content_name) {
-				TRACE_INFO
+				TRACE_SECURE_INFO
 					("[CONTENTNAME][%d] [%s]", request_id, info->content_name);
 				if (dp_db_set_column
 						(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
@@ -176,7 +176,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 					TRACE_ERROR("[ERROR][%d][SQL]", request_id);
 			}
 			if (info->etag) {
-				TRACE_INFO("[ETAG][%d] [%s]", request_id, info->etag);
+				TRACE_SECURE_INFO("[ETAG][%d] [%s]", request_id, info->etag);
 				if (dp_db_replace_column
 						(request_id, DP_DB_TABLE_DOWNLOAD_INFO, DP_DB_COL_ETAG,
 						DP_DB_COL_TYPE_TEXT, info->etag) < 0)
@@ -307,7 +307,7 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 			if (str) {
 				str++;
 				content_name = dp_strdup(str);
-				TRACE_INFO("[PARSE][%d] content_name [%s]",
+				TRACE_SECURE_INFO("[PARSE][%d] content_name [%s]",
 					request_id, content_name);
 			}
 			TRACE_INFO
@@ -334,7 +334,7 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 			errorcode = DP_ERROR_NONE;
 			state = DP_STATE_COMPLETED;
 
-			TRACE_INFO("[COMPLETED][%d] saved to [%s]",
+			TRACE_SECURE_INFO("[COMPLETED][%d] saved to [%s]",
 					request_id, info->saved_path);
 		} else {
 			TRACE_ERROR("Cannot enter here");
@@ -653,7 +653,7 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 		} else {
 			/* FIXME later : It is better to handle the unlink function in download agaent module
 			 * or in upload the request data to memory after the download provider process is restarted */
-			TRACE_INFO("[RESTART][%d] try to remove tmp file [%s]",
+			TRACE_SECURE_INFO("[RESTART][%d] try to remove tmp file [%s]",
 				request->id, tmp_saved_path);
 			if (dp_is_file_exist(tmp_saved_path) == 0)
 				if (unlink(tmp_saved_path) != 0)

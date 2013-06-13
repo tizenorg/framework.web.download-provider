@@ -71,13 +71,13 @@ da_result_t get_extension_from_mime_type(char *mime_type, char **extension)
 		ret = DA_ERR_INVALID_ARGUMENT;
 		goto ERR;
 	}
-	DA_LOG(Default,"input mime type = %s", mime_type);
+	DA_SECURE_LOGD("input mime type = %s", mime_type);
 	if (DA_RESULT_OK != (ret = da_mime_get_ext_name(mime_type, &ext))) {
 		DA_LOG_ERR(Default,"can't find proper extension!");
 		goto ERR;
 	}
 	*extension = ext;
-	DA_LOG(Default,"found extension = %s", *extension);
+	DA_SECURE_LOGD("found extension = %s", *extension);
 
 ERR:
 	return ret;
@@ -282,7 +282,7 @@ void remove_file(const char *file_path)
 	DA_LOG_FUNC_START(FileManager);
 
 	if (file_path && is_file_exist(file_path)) {
-		DA_LOG(FileManager,"remove file [%s]", file_path);
+		DA_SECURE_LOGD("remove file [%s]", file_path);
 		if (unlink(file_path) < 0) {
 			DA_LOG_ERR(FileManager,"file removing failed.");
 		}

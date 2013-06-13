@@ -114,7 +114,7 @@ da_result_t get_user_agent_string(char **uagent_str)
 	ret = __get_conf_string(key, uagent_str);
 	if(ret == DA_RESULT_OK) {
 		if(*uagent_str) {
-			DA_LOG(Default,"getting uagent_str = \n%s", *uagent_str);
+			DA_SECURE_LOGD("getting uagent_str = \n%s", *uagent_str);
 			return ret;
 		}
 	}
@@ -148,7 +148,7 @@ char *get_proxy_address(void)
 	}
 
 	if (proxyRet) {
-		DA_LOG(Default,"===== Proxy address[%s] =====", proxyRet);
+		DA_SECURE_LOGD("===== Proxy address[%s] =====", proxyRet);
 		proxy = strdup(proxyRet);
 		free(proxyRet);
 		proxyRet = NULL;

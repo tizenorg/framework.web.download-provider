@@ -1,4 +1,3 @@
-
 Name:       download-provider
 Summary:    download the contents in background.
 Version:    1.0.5
