@@ -26,6 +26,8 @@
 
 #include <signal.h>
 
+#include <pthread.h>
+
 #include "download-provider.h"
 #include "download-provider-log.h"
 #include "download-provider-config.h"
@@ -77,7 +79,11 @@ static unsigned __get_active_count(dp_request_slots *requests)
 		return 0;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
-		CLIENT_MUTEX_LOCK(&requests[i].mutex);
+		//CLIENT_MUTEX_LOCK(&requests[i].mutex);
+		if (pthread_mutex_trylock(&requests[i].mutex) != 0) {
+			count++;
+			continue;
+		}
 		if (requests[i].request != NULL) {
 			if (requests[i].request->state == DP_STATE_CONNECTING ||
 				requests[i].request->state == DP_STATE_DOWNLOADING)
@@ -101,7 +107,9 @@ static int __get_oldest_request_with_network(dp_request_slots *requests, dp_stat
 		return -1;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
-		CLIENT_MUTEX_LOCK(&requests[i].mutex);
+		//CLIENT_MUTEX_LOCK(&requests[i].mutex);
+		if (pthread_mutex_trylock(&requests[i].mutex) != 0)
+			continue;
 		if (requests[i].request != NULL) {
 			if (requests[i].request->state == state &&
 				requests[i].request->start_time > 0 &&
@@ -127,11 +135,21 @@ static void *__request_download_start_agent(void *args)
 	dp_error_type errcode = DP_ERROR_NONE;
 
 	dp_request_slots *request_slot = (dp_request_slots *) args;
-	if (request_slot == NULL || request_slot->request == NULL) {
-		TRACE_ERROR("[NULL-CHECK] download_clientinfo_slot");
+	if (request_slot == NULL) {
+		TRACE_ERROR("[NULL-CHECK] request_slot");
 		pthread_exit(NULL);
 		return 0;
 	}
+
+	CLIENT_MUTEX_LOCK(&request_slot->mutex);
+
+	if (request_slot->request == NULL) {
+		TRACE_ERROR("[NULL-CHECK] request");
+		CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+		pthread_exit(NULL);
+		return 0;
+	}
+
 	dp_request *request = request_slot->request;
 
 	if (dp_is_alive_download(request->agent_id)) {
@@ -141,7 +159,6 @@ static void *__request_download_start_agent(void *args)
 		errcode = dp_start_agent_download(request_slot);
 	}
 
-	CLIENT_MUTEX_LOCK(&request_slot->mutex);
 	// send to state callback.
 	if (errcode == DP_ERROR_NONE) {
 		// CONNECTING
@@ -162,13 +179,16 @@ static void *__request_download_start_agent(void *args)
 		request->error = DP_ERROR_CONNECTION_FAILED;
 		dp_ipc_send_event(request->group->event_socket,
 			request->id, request->state, request->error, 0);
-		dp_thread_queue_manager_wake_up();
+	} else if (errcode == DP_ERROR_INVALID_STATE) {
+		// API FAILED
+		request->error = DP_ERROR_INVALID_STATE;
+		dp_ipc_send_event(request->group->event_socket,
+			request->id, request->state, request->error, 0);
 	} else {
 		request->state = DP_STATE_FAILED;
 		request->error = errcode;
 		dp_ipc_send_event(request->group->event_socket,
 			request->id, request->state, request->error, 0);
-		dp_thread_queue_manager_wake_up();
 	}
 	if (dp_db_set_column
 			(request->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
@@ -176,6 +196,12 @@ static void *__request_download_start_agent(void *args)
 		TRACE_ERROR("[ERROR][%d][SQL]", request->id);
 
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+
+	if (errcode == DP_ERROR_NONE) {
+		TRACE_INFO("try other requests -----------------");
+		dp_thread_queue_manager_wake_up();
+	}
+
 	pthread_exit(NULL);
 	return 0;
 }
@@ -256,10 +282,12 @@ void *dp_thread_queue_manager(void *arg)
 		CLIENT_MUTEX_LOCK(&(g_dp_queue_mutex));
 		pthread_cond_wait(&g_dp_queue_cond, &g_dp_queue_mutex);
 
+		// request thread response instantly
+		CLIENT_MUTEX_UNLOCK(&(g_dp_queue_mutex));
+
 		if (privates == NULL || privates->requests == NULL ||
 			privates->listen_fd < 0) {
 			TRACE_INFO("Terminate Thread");
-			CLIENT_MUTEX_UNLOCK(&(g_dp_queue_mutex));
 			break;
 		}
 
@@ -280,7 +308,6 @@ void *dp_thread_queue_manager(void *arg)
 		if (privates->network_status == DP_NETWORK_TYPE_OFF &&
 			privates->is_connected_wifi_direct == 0) {
 			TRACE_INFO("[CHECK NETWORK STATE]");
-			CLIENT_MUTEX_UNLOCK(&(g_dp_queue_mutex));
 			continue;
 		}
 
@@ -324,7 +351,6 @@ void *dp_thread_queue_manager(void *arg)
 		if (active_count >= DP_MAX_DOWNLOAD_AT_ONCE) {
 			TRACE_INFO("[BUSY] Active[%d] Max[%d]",
 				active_count, DP_MAX_DOWNLOAD_AT_ONCE);
-			CLIENT_MUTEX_UNLOCK(&(g_dp_queue_mutex));
 			continue;
 		}
 
@@ -359,7 +385,6 @@ void *dp_thread_queue_manager(void *arg)
 			__request_download_start_thread(&privates->requests[i]);
 			active_count++;
 		}
-		CLIENT_MUTEX_UNLOCK(&(g_dp_queue_mutex));
 	}
 	pthread_cond_destroy(&g_dp_queue_cond);
 	pthread_exit(NULL);
