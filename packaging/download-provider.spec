@@ -87,10 +87,6 @@ make %{?jobs:-j%jobs}
 rm -rf %{buildroot}
 %make_install
 mkdir -p %{buildroot}%{_licensedir}
-mkdir -p  %{buildroot}%{_sysconfdir}/rc.d/rc3.d
-ln -s %{_sysconfdir}/rc.d/init.d/download-provider-service  %{buildroot}%{_sysconfdir}/rc.d/rc3.d/S70download-provider-service
-mkdir -p  %{buildroot}%{_sysconfdir}/rc.d/rc5.d
-ln -s %{_sysconfdir}/rc.d/init.d/download-provider-service  %{buildroot}%{_sysconfdir}/rc.d/rc5.d/S70download-provider-service
 
 mkdir -p %{buildroot}%{_libdir}/systemd/user/tizen-middleware.target.wants
 mkdir -p %{buildroot}%{_libdir}/systemd/user/sockets.target.wants
@@ -176,9 +172,6 @@ fi
 %{_libdir}/libdownload-provider-interface.so.%{version}
 %{_libdir}/libdownload-provider-interface.so.0
 %{_bindir}/%{name}
-%{_sysconfdir}/rc.d/init.d/download-provider-service
-%{_sysconfdir}/rc.d/rc3.d/S70download-provider-service
-%{_sysconfdir}/rc.d/rc5.d/S70download-provider-service
 %{_licensedir}/%{name}
 %{_dbusservicedir}/org.download-provider.service
 %attr(660,root,app) /opt/usr/dbspace/.download-provider.db
