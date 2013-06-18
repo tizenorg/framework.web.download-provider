@@ -1,7 +1,7 @@
 Name:       download-provider
 Summary:    download the contents in background.
-Version:    1.0.5
-Release:    9
+Version:    1.0.6
+Release:    0
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
 Source0:    %{name}-%{version}.tar.gz
@@ -196,6 +196,14 @@ fi
 %{_libdir}/pkgconfig/download-provider-interface.pc
 
 %changelog
+* Tue Jun 18 2013 Jungki Kwak <jungki.kwak@samsung.com>
+- Add smack rule about "_"
+- Unlock mutex before calling libsoup cancel API
+- Fix double lock when wakeup queue thread
+- Disable DBUS-Activation by socket-activation of systemd
+- Convert to systemd API
+- Merge source codes from private master branch
+
 * Thu May 15 2013 Jungki Kwak <jungki.kwak@samsung.com>
 - Create default download directory with app ownership
 
