@@ -11,6 +11,8 @@
 			<smack request="device::sys_logging" type="w" />
 			<smack request="system::media" type="arwxt" />
 			<smack request="system::ext_media" type="arwxt" />
+			<smack request="system::ext_media" type="arwxt" />
+			<smack request="_" type="w" />
 		</request>
 		<permit>
 			<smack permit="org.tizen.indicator" type="rx" />
