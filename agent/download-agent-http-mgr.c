@@ -1735,13 +1735,15 @@ da_result_t _cancel_transaction(stage_info *stage)
 		http_state_t state = 0;
 		_da_thread_mutex_lock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(stage)));
 		state = GET_HTTP_STATE_ON_STAGE(stage);
-		if (state <= HTTP_STATE_DOWNLOAD_REQUESTED)
+		if (state <= HTTP_STATE_DOWNLOAD_REQUESTED) {
+			_da_thread_mutex_unlock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(stage)));
 			ret = PI_http_cancel_transaction(transaction_id, DA_TRUE);
-		else
+		} else {
+			_da_thread_mutex_unlock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(stage)));
 			ret = PI_http_cancel_transaction(transaction_id, DA_FALSE);
-		_da_thread_mutex_unlock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(stage)));
-	}
+		}
 
+	}
 	return ret;
 }
 
