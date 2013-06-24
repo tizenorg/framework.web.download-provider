@@ -11,7 +11,9 @@
 			<smack request="device::sys_logging" type="w" />
 			<smack request="system::media" type="arwxt" />
 			<smack request="system::ext_media" type="arwxt" />
-			<smack request="system::ext_media" type="arwxt" />
+			<smack request="system::vconf" type="rwx" />
+			<smack request="device::app_logging" type="w" />
+			<smack request="ail::db" type="rw" />
 			<smack request="_" type="w" />
 		</request>
 		<permit>
