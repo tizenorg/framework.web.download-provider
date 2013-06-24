@@ -6,12 +6,13 @@ Group:      Development/Libraries
 License:    Apache License, Version 2.0
 Source0:    %{name}-%{version}.tar.gz
 
-Requires(post): /usr/bin/sqlite3
 Requires(post): sys-assert
 Requires(post): libdevice-node
 Requires(post): org.tizen.indicator
 Requires(post): org.tizen.quickpanel
+Requires(post): sqlite
 BuildRequires:  cmake
+BuildRequires:  libprivilege-control-conf
 BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:  pkgconfig(gobject-2.0)
 BuildRequires:  pkgconfig(dlog)
