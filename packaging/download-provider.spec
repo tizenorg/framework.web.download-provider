@@ -158,6 +158,12 @@ CREATE UNIQUE INDEX requests_index ON logging (id, state, errorcode, packagename
 '
 fi
 
+%post
+chown root:5000 /opt/usr/dbspace/.download-provider.db
+chown root:5000 /opt/usr/dbspace/.download-provider.db-journal
+chmod 660 /opt/usr/dbspace/.download-provider.db
+chmod 660 /opt/usr/dbspace/.download-provider.db-journal
+
 %files
 %defattr(-,root,root,-)
 %dir /opt/data/%{name}
