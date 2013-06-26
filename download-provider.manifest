@@ -15,6 +15,7 @@
 			<smack request="device::app_logging" type="w" />
 			<smack request="ail::db" type="rw" />
 			<smack request="data-provider-master::notification" type="rw" />
+			<smack request="data-provider-master::notification.client" type="w" />
 			<smack request="_" type="w" />
 		</request>
 		<permit>
