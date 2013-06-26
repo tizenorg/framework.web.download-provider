@@ -33,6 +33,7 @@
 #include "download-provider-queue.h"
 #include "download-provider-notification.h"
 #include "download-provider-request.h"
+#include "download-provider-da-interface.h"
 
 #include "download-agent-defs.h"
 #include "download-agent-interface.h"
@@ -142,6 +143,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 
 	int request_id = request->id;
 
+	int sql_error = 0;
 	// update info before sending event
 	if (info->tmp_saved_path) {
 		TRACE_SECURE_INFO("[STARTED][%d] [%s]", request_id, info->tmp_saved_path);
@@ -152,8 +154,10 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 				TRACE_SECURE_INFO("[MIME-TYPE][%d] [%s]", request_id, info->file_type);
 				if (dp_db_set_column(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
 						DP_DB_COL_MIMETYPE, DP_DB_COL_TYPE_TEXT,
-						info->file_type) < 0)
+						info->file_type) < 0) {
 					TRACE_ERROR("[ERROR][%d][SQL]", request_id);
+					sql_error = 1;
+				}
 			}
 
 			if (info->file_size > 0) {
@@ -163,8 +167,10 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 				if (dp_db_set_column
 						(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
 						DP_DB_COL_CONTENT_SIZE,
-						DP_DB_COL_TYPE_INT64, &info->file_size) < 0)
+						DP_DB_COL_TYPE_INT64, &info->file_size) < 0) {
 					TRACE_ERROR("[ERROR][%d][SQL]", request_id);
+					sql_error = 1;
+				}
 			}
 
 			if (info->content_name) {
@@ -173,20 +179,36 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 				if (dp_db_set_column
 						(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
 						DP_DB_COL_CONTENT_NAME,
-						DP_DB_COL_TYPE_TEXT, info->content_name) < 0)
+						DP_DB_COL_TYPE_TEXT, info->content_name) < 0) {
 					TRACE_ERROR("[ERROR][%d][SQL]", request_id);
+					sql_error = 1;
+				}
 			}
 			if (info->etag) {
 				TRACE_SECURE_INFO("[ETAG][%d] [%s]", request_id, info->etag);
 				if (dp_db_replace_column
 						(request_id, DP_DB_TABLE_DOWNLOAD_INFO, DP_DB_COL_ETAG,
-						DP_DB_COL_TYPE_TEXT, info->etag) < 0)
+						DP_DB_COL_TYPE_TEXT, info->etag) < 0) {
 					TRACE_ERROR("[ERROR][%d][SQL]", request_id);
+					sql_error = 1;
+				}
 			}
 		} else {
 			TRACE_ERROR
 				("[ERROR][%d][SQL] failed to insert downloadinfo",
 				request_id);
+			sql_error = 1;
+		}
+	}
+
+	if (sql_error == 1) {
+		if (dp_db_is_full_error() == 0) {
+			request->error = DP_ERROR_NO_SPACE;
+			TRACE_ERROR("[SQLITE_FULL][%d]", request_id);
+			if (dp_cancel_agent_download(request->agent_id) < 0)
+				TRACE_INFO("[fail][%d]cancel_agent", request_id);
+			CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
+			return ;
 		}
 	}
 
@@ -388,6 +410,11 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 				}
 			} else {
 				TRACE_ERROR("[ERROR][%d][SQL]", request_id);
+				if (dp_db_is_full_error() == 0) {
+					errorcode = DP_ERROR_NO_SPACE;
+					state = DP_STATE_FAILED;
+					TRACE_ERROR("[SQLITE_FULL][%d]", request_id);
+				}
 			}
 			if (content_name != NULL)
 				free(content_name);
@@ -414,7 +441,7 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 		}
 	} else if (info->err == DA_RESULT_USER_CANCELED) {
 		state = DP_STATE_CANCELED;
-		errorcode = DP_ERROR_NONE;
+		errorcode = request->error;
 		TRACE_INFO("[CANCELED][%d]", request_id);
 	} else {
 		state = DP_STATE_FAILED;

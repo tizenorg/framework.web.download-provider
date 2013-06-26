@@ -138,6 +138,8 @@ typedef struct {
 int dp_db_open();
 void dp_db_close();
 
+int dp_db_is_full_error();
+
 int dp_db_remove_all(int id);
 int dp_db_remove(int id, char *table);
 int dp_db_insert_column(int id, char *table, char *column,

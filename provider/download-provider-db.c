@@ -83,6 +83,17 @@ static void __dp_finalize(sqlite3_stmt *stmt)
 			sqlite3_errmsg(g_dp_db_handle));
 }
 
+int dp_db_is_full_error()
+{
+	if (g_dp_db_handle == 0) {
+		TRACE_ERROR("HANDLE is null");
+		return -1;
+	}
+	if (sqlite3_errcode(g_dp_db_handle) == SQLITE_FULL)
+		return 0;
+	return -1;
+}
+
 int dp_db_get_count_by_limit_time()
 {
 	int errorcode = SQLITE_OK;

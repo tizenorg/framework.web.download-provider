@@ -487,7 +487,12 @@ static int __dp_add_extra_param(int fd, int id)
 				// insert
 				if (dp_db_insert_columns(DP_DB_TABLE_NOTIFICATION,
 						conds_count, conds_p) < 0) {
-					ret = DP_ERROR_OUT_OF_MEMORY;
+					if (dp_db_is_full_error() == 0) {
+						TRACE_ERROR("[SQLITE_FULL][%d]", id);
+						ret = DP_ERROR_NO_SPACE;
+					} else {
+						ret = DP_ERROR_OUT_OF_MEMORY;
+					}
 					break;
 				}
 			} // else skip. already exist
@@ -1144,13 +1149,25 @@ static dp_error_type __dp_do_set_command(int sock, dp_command* cmd, dp_request *
 		if (dp_db_get_conds_rows_count(DP_DB_TABLE_HTTP_HEADERS,
 				DP_DB_COL_ID, "AND", 2, conds_p) <= 0) { // insert
 			if (dp_db_insert_columns(DP_DB_TABLE_HTTP_HEADERS,
-					conds_count, conds_p) < 0)
-				errorcode = DP_ERROR_OUT_OF_MEMORY;
+					conds_count, conds_p) < 0) {
+				if (dp_db_is_full_error() == 0) {
+					TRACE_ERROR("[SQLITE_FULL][%d]", cmd->id);
+					errorcode = DP_ERROR_NO_SPACE;
+				} else {
+					errorcode = DP_ERROR_OUT_OF_MEMORY;
+				}
+			}
 		} else { // update data by field
 			if (dp_db_cond_set_column(cmd->id, DP_DB_TABLE_HTTP_HEADERS,
 					DP_DB_COL_HEADER_DATA, DP_DB_COL_TYPE_TEXT, read_str2,
-					DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT, read_str) < 0)
-				errorcode = DP_ERROR_OUT_OF_MEMORY;
+					DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT, read_str) < 0) {
+				if (dp_db_is_full_error() == 0) {
+					TRACE_ERROR("[SQLITE_FULL][%d]", cmd->id);
+					errorcode = DP_ERROR_NO_SPACE;
+				} else {
+					errorcode = DP_ERROR_OUT_OF_MEMORY;
+				}
+			}
 		}
 		dp_ipc_send_errorcode(sock, errorcode);
 		break;
@@ -1384,8 +1401,8 @@ static dp_error_type __do_dp_start_command(int sock, int id, dp_privates *privat
 
 	// check status
 	if (errorcode == DP_ERROR_NONE &&
-			__is_started(request->state) == 0 ||
-			request->state == DP_STATE_COMPLETED)
+			(__is_started(request->state) == 0 ||
+			request->state == DP_STATE_COMPLETED))
 		errorcode = DP_ERROR_INVALID_STATE;
 
 	if (errorcode == DP_ERROR_NONE) {

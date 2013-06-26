@@ -220,6 +220,10 @@ dp_error_type dp_request_create(int id, dp_client_group *group, dp_request **emp
 	conds_p[2].value = new_request->packagename;
 	if (dp_db_insert_columns(DP_DB_TABLE_LOG, conds_count, conds_p) < 0) {
 		dp_request_free(new_request);
+		if (dp_db_is_full_error() == 0) {
+			TRACE_ERROR("[SQLITE_FULL]");
+			return DP_ERROR_NO_SPACE;
+		}
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -263,6 +267,10 @@ dp_error_type dp_request_set_url(int id, dp_request *request, char *url)
 			(id, DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_URL,
 			DP_DB_COL_TYPE_TEXT, url) < 0) {
 		TRACE_ERROR("[CHECK SQL][%d]", id);
+		if (dp_db_is_full_error() == 0) {
+			TRACE_ERROR("[SQLITE_FULL][%d]", id);
+			return DP_ERROR_NO_SPACE;
+		}
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
 	return DP_ERROR_NONE;
@@ -299,6 +307,10 @@ dp_error_type dp_request_set_destination(int id, dp_request *request, char *dest
 			(id, DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_DESTINATION,
 			DP_DB_COL_TYPE_TEXT, dest) < 0) {
 		TRACE_ERROR("[CHECK SQL][%d]", id);
+		if (dp_db_is_full_error() == 0) {
+			TRACE_ERROR("[SQLITE_FULL][%d]", id);
+			return DP_ERROR_NO_SPACE;
+		}
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
 	return DP_ERROR_NONE;
@@ -335,6 +347,10 @@ dp_error_type dp_request_set_filename(int id, dp_request *request, char *filenam
 			(id, DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_FILENAME,
 			DP_DB_COL_TYPE_TEXT, filename) < 0) {
 		TRACE_ERROR("[CHECK SQL][%d]", id);
+		if (dp_db_is_full_error() == 0) {
+			TRACE_ERROR("[SQLITE_FULL][%d]", id);
+			return DP_ERROR_NO_SPACE;
+		}
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
 
