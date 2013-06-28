@@ -34,12 +34,6 @@
 		nanosleep(&interval,&remainder); \
 	} while(0)
 
-typedef enum {
-	DA_STORAGE_PHONE,			/*To Store in Phone memory*/
-	DA_STORAGE_MMC,			    /*To Store in MMC */
-	DA_STORAGE_SYSTEM			/*To Store in both Phone and MMC*/
-} da_storage_type_t;
-
 typedef struct _da_storage_size_t {
 	unsigned long b_available;
 	unsigned long b_size;
@@ -55,7 +49,7 @@ void get_random_number(int *out_num);
 da_result_t  get_available_dd_id(int *available_id);
 da_result_t  get_extension_from_mime_type(char *mime_type, char **extension);
 da_mime_type_id_t get_mime_type_id(char *content_type);
-da_result_t  get_available_memory(da_storage_type_t storage_type, da_storage_size_t *avail_memory);
+da_result_t  get_available_memory(da_storage_size_t *avail_memory);
 da_bool_t is_valid_url(const char *url, da_result_t *err_code);
 
 int read_data_from_file(char *file, char**out_buffer);

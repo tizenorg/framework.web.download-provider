@@ -24,9 +24,7 @@
 #include "download-agent-type.h"
 #include "download-agent-dl-mgr.h"
 
-#define DA_DEFAULT_FILE_DIR_PATH	"/opt/usr/media/.tmp_download"
 #define DA_DEFAULT_INSTALL_PATH_FOR_PHONE "/opt/usr/media/Downloads"
-#define DA_DEFAULT_INSTALL_PATH_FOR_MMC "/opt/storage/sdcard/Downloads"
 
 da_bool_t is_file_exist(const char *file_path);
 da_bool_t is_dir_exist(const char *dir_path);
@@ -49,7 +47,6 @@ char *get_full_path_avoided_duplication(char *in_dir, char *in_candidate_file_na
 
 da_result_t copy_file(const char *src, const char *dest);
 da_result_t create_dir(const char *install_dir);
-da_result_t get_default_dir(char **out_path);
 da_result_t get_default_install_dir(char **out_path);
 
 #endif

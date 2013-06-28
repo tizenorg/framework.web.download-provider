@@ -1490,7 +1490,7 @@ da_result_t _check_enough_memory_for_this_download(stage_info *stage)
 
 	cont_len = (unsigned long long) GET_REQUEST_HTTP_HDR_CONT_LEN(request_info);
 	if (cont_len) {
-		ret = get_available_memory(DA_STORAGE_PHONE, &memory);
+		ret = get_available_memory(&memory);
 		if (DA_RESULT_OK == ret) {
 			DA_LOG(HTTPManager, "Memory avail: %lu, Memory block :%lu Content: %llu",
 					memory.b_available,memory.b_size, cont_len);
@@ -1552,7 +1552,7 @@ da_result_t _check_this_partial_download_is_available(stage_info *stage,
 	}
 
 	if (remained_content_len) {
-		ret = get_available_memory(DA_STORAGE_PHONE, &memory);
+		ret = get_available_memory(&memory);
 		if (DA_RESULT_OK == ret) {
 			DA_LOG(HTTPManager, "Memory avail: %lu, Memory block :%lu Content: %llu",
 					memory.b_available,memory.b_size, remained_content_len);
@@ -1622,7 +1622,7 @@ da_result_t _check_resume_download_is_available(stage_info *stage,
 	}
 
 	if (remained_content_len) {
-		ret = get_available_memory(DA_STORAGE_PHONE, &memory);
+		ret = get_available_memory(&memory);
 		if (DA_RESULT_OK == ret) {
 			DA_LOG(HTTPManager, "Memory avail: %lu, Memory block :%lu Content: %llu",
 					memory.b_available,memory.b_size, remained_content_len);

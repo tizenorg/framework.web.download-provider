@@ -1157,37 +1157,9 @@ da_result_t create_dir(const char *install_dir)
 	return ret;
 }
 
-
-da_result_t get_default_dir(char **out_path)
-{
-	char *tmp_default_path = DA_NULL;
-	int len = 0;
-
-	if (!out_path) {
-		DA_LOG_ERR(ClientNoti, "DA_ERR_INVALID_ARGUMENT");
-		return DA_ERR_INVALID_ARGUMENT;
-	}
-
-	len = strlen(DA_DEFAULT_FILE_DIR_PATH);
-	tmp_default_path = calloc(len + 1, sizeof(char));
-	if (!tmp_default_path) {
-		return DA_ERR_FAIL_TO_MEMALLOC;
-	}
-
-	memcpy(tmp_default_path, DA_DEFAULT_FILE_DIR_PATH, len);
-	tmp_default_path[len] = '\0';
-
-	*out_path = tmp_default_path;
-
-	DA_SECURE_LOGD("default temp path = [%s]", *out_path);
-
-	return DA_RESULT_OK;
-}
-
 da_result_t get_default_install_dir(char **out_path)
 {
 	char *default_path = DA_NULL;
-	da_storage_type_t type;
 	da_result_t ret = DA_RESULT_OK;
 	int len = 0;
 
@@ -1195,22 +1167,15 @@ da_result_t get_default_install_dir(char **out_path)
 		DA_LOG_ERR(ClientNoti, "DA_ERR_INVALID_ARGUMENT");
 		return DA_ERR_INVALID_ARGUMENT;
 	}
-	ret = get_storage_type(&type);
-	if (DA_RESULT_OK != ret)
-		return ret;
-	if (type == DA_STORAGE_MMC)
-		len = strlen(DA_DEFAULT_INSTALL_PATH_FOR_MMC);
-	else
-		len = strlen(DA_DEFAULT_INSTALL_PATH_FOR_PHONE);
+
+	len = strlen(DA_DEFAULT_INSTALL_PATH_FOR_PHONE);
 
 	default_path = calloc(len + 1, sizeof(char));
 	if (!default_path) {
 		return DA_ERR_FAIL_TO_MEMALLOC;
 	}
-	if (type == DA_STORAGE_MMC)
-		memcpy(default_path, DA_DEFAULT_INSTALL_PATH_FOR_MMC, len);
-	else // DA_STROAGE_PHONE
-		memcpy(default_path, DA_DEFAULT_INSTALL_PATH_FOR_PHONE, len);
+
+	memcpy(default_path, DA_DEFAULT_INSTALL_PATH_FOR_PHONE, len);
 	default_path[len] = '\0';
 
 	*out_path = default_path;

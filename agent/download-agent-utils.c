@@ -137,9 +137,7 @@ int read_data_from_file(char *file, char **out_buffer)
 	return buffer_len;
 }
 
-da_result_t get_available_memory(
-        da_storage_type_t storage_type,
-        da_storage_size_t *avail_memory)
+da_result_t get_available_memory(da_storage_size_t *avail_memory)
 {
 	da_result_t ret = DA_RESULT_OK;
 	int fs_ret = 0;
@@ -168,7 +166,6 @@ da_result_t get_available_memory(
 	avail_memory->b_available = filesys_info.f_bavail;
 	avail_memory->b_size = filesys_info.f_bsize;
 
-	DA_LOG(Default, "Memory type : %d", storage_type);
 	DA_LOG_VERBOSE(Default, "Available Memory(f_bavail) : %llu", filesys_info.f_bavail);
 	DA_LOG_VERBOSE(Default, "Available Memory(f_bsize) : %d", filesys_info.f_bsize);
 	DA_LOG(Default, "Available Memory(kbytes) : %lu", (filesys_info.f_bavail/1024)*filesys_info.f_bsize);

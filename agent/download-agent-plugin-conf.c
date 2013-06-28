@@ -50,51 +50,6 @@ da_result_t __get_conf_string(const char *key, char **out_string)
 #endif
 }
 
-da_result_t get_storage_type(da_storage_type_t *type)
-{
-  da_result_t ret = DA_RESULT_OK;
-#ifdef _EFL_PLATFORM
-  int value = -1;
-#endif
-
-  if (!type)  {
-    DA_LOG_ERR(Default,"DA_ERR_CONF_FAIL");
-	ret = DA_ERR_INVALID_ARGUMENT;
-	goto ERR;
-  }
-
-#ifdef _EFL_PLATFORM
-	if (0 != vconf_get_int(VCONFKEY_SETAPPL_DEFAULT_MEM_WAP_INT, &value)) {
-		DA_LOG_ERR(Default,"DA_ERR_CONF_FAIL");
-		ret = DA_ERR_FAIL_TO_GET_CONF_VALUE;
-		goto ERR;
-	}
-
-	switch (value) {
-	case SETTING_DEF_MEMORY_PHONE:
-		DA_LOG(Default,"Storage set - DA_STORAGE_PHONE");
-		*type = DA_STORAGE_PHONE;
-		break;
-	case SETTING_DEF_MEMORY_MMC:
-		*type = DA_STORAGE_MMC;
-		DA_LOG(Default,"Storage set - DA_STORAGE_MMC");
-		break;
-	case SETTING_DEF_MEMORY_MAX:
-		*type = DA_STORAGE_SYSTEM;
-		DA_LOG(Default,"Storage set - DA_STORAGE_SYSTEM");
-		break;
-	default:
-		DA_LOG_ERR(Default,"DA_ERR_CONF_FAIL");
-		ret = DA_ERR_FAIL_TO_GET_CONF_VALUE;
-		break;
-	}
-#endif
-
-ERR:
-   return ret;
-
-}
-
 da_result_t get_user_agent_string(char **uagent_str)
 {
 	da_result_t  ret = DA_RESULT_OK;
