@@ -1,6 +1,6 @@
 Name:       download-provider
 Summary:    download the contents in background.
-Version:    1.0.6
+Version:    1.0.7
 Release:    0
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
@@ -196,6 +196,11 @@ chmod 660 /opt/usr/dbspace/.download-provider.db-journal
 %{_libdir}/pkgconfig/download-provider-interface.pc
 
 %changelog
+* Fri Jun 28 2013 Jungki Kwak <jungki.kwak@samsung.com>
+- Change to use the default storage as phone memory
+- Change db file permission at post section
+- Add smack rules
+
 * Tue Jun 18 2013 Jungki Kwak <jungki.kwak@samsung.com>
 - Add smack rule about "_"
 - Unlock mutex before calling libsoup cancel API
