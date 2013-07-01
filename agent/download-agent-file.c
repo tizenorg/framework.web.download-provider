@@ -384,7 +384,7 @@ da_result_t __get_candidate_file_name(stage_info *stage, char **out_pure_file_na
 					DA_NULL, &file_name);
 			if (b_ret && file_name) {
 				DA_SECURE_LOGD("Name from Content-Disposition :[%s]", file_name);
-				__divide_file_name_into_pure_name_N_extesion(file_name, &pure_file_name, DA_NULL);
+				__divide_file_name_into_pure_name_N_extesion(file_name, &pure_file_name, &extension);
 				if (file_name) {
 					free(file_name);
 					file_name = DA_NULL;
