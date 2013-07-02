@@ -52,6 +52,7 @@ Description: download the contents in background (developement files)
 %define _databasefile %{_databasedir}/.download-provider.db
 %define _dbusservicedir /usr/share/dbus-1/services
 %define _licensedir /usr/share/license
+%define _smackruledir /opt/etc/smack/accesses.d
 
 %define cmake \
 	CFLAGS="${CFLAGS:-%optflags} -fPIC -D_REENTRANT -fvisibility=hidden"; export CFLAGS \
@@ -70,6 +71,7 @@ Description: download the contents in background (developement files)
 		-DDATABASE_FILE:PATH=%{_databasefile} \\\
 		-DDBUS_SERVICE_DIR:PATH=%{_dbusservicedir} \\\
 		-DLICENSE_DIR:PATH=%{_licensedir} \\\
+		-DSMACK_RULE_DIR:PATH=%{_smackruledir} \\\
 		-DSUPPORT_DBUS_SYSTEM:BOOL=OFF \\\
 		-DSUPPORT_WIFI_DIRECT:BOOL=OFF \\\
 		-DSUPPORT_LOG_MESSAGE:BOOL=ON \\\
@@ -181,6 +183,7 @@ chmod 660 /opt/usr/dbspace/.download-provider.db-journal
 %{_bindir}/%{name}
 %{_licensedir}/%{name}
 %{_dbusservicedir}/org.download-provider.service
+%{_smackruledir}/%{name}.rule
 %attr(660,root,app) /opt/usr/dbspace/.download-provider.db
 %attr(660,root,app) /opt/usr/dbspace/.download-provider.db-journal
 

@@ -4,25 +4,6 @@
 		<provide>
 			<label name="download-provider::db" />
 		</provide>
-		<request>
-			<smack request="download-provider::db" type="rw" />
-			<smack request="system::use_internet" type="w" />
-			<smack request="sys-assert::core" type="rwxat" />
-			<smack request="device::sys_logging" type="w" />
-			<smack request="system::media" type="arwxt" />
-			<smack request="system::ext_media" type="arwxt" />
-			<smack request="system::vconf" type="rwx" />
-			<smack request="device::app_logging" type="w" />
-			<smack request="ail::db" type="rw" />
-			<smack request="data-provider-master::notification" type="rw" />
-			<smack request="data-provider-master::notification.client" type="w" />
-			<smack request="_" type="w" />
-		</request>
-		<permit>
-			<smack permit="org.tizen.indicator" type="rwx" />
-			<smack permit="org.tizen.quickpanel" type="rx" />
-			<smack permit="system::use_internet" type="w" />
-		</permit>
 	</define>
 	<request>
 		<domain name="download-provider" />
