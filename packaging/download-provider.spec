@@ -91,10 +91,10 @@ rm -rf %{buildroot}
 %make_install
 mkdir -p %{buildroot}%{_licensedir}
 
-mkdir -p %{buildroot}%{_libdir}/systemd/user/tizen-middleware.target.wants
-mkdir -p %{buildroot}%{_libdir}/systemd/user/sockets.target.wants
-ln -s ../download-provider.service %{buildroot}%{_libdir}/systemd/user/tizen-middleware.target.wants/
-ln -s ../download-provider.socket %{buildroot}%{_libdir}/systemd/user/sockets.target.wants/
+mkdir -p %{buildroot}%{_libdir}/systemd/system/graphical.target.wants
+mkdir -p %{buildroot}%{_libdir}/systemd/system/sockets.target.wants
+ln -s ../download-provider.service %{buildroot}%{_libdir}/systemd/system/graphical.target.wants/
+ln -s ../download-provider.socket %{buildroot}%{_libdir}/systemd/system/sockets.target.wants/
 
 mkdir -p %{buildroot}/opt/data/%{name}
 mkdir -p %{buildroot}%{_databasedir}
@@ -174,10 +174,10 @@ chmod 660 /opt/usr/dbspace/.download-provider.db-journal
 %{_localedir}/*
 %{_libdir}/libdownloadagent2.so.0.0.1
 %{_libdir}/libdownloadagent2.so
-%{_libdir}/systemd/user/download-provider.service
-%{_libdir}/systemd/user/tizen-middleware.target.wants/download-provider.service
-%{_libdir}/systemd/user/download-provider.socket
-%{_libdir}/systemd/user/sockets.target.wants/download-provider.socket
+%{_libdir}/systemd/system/download-provider.service
+%{_libdir}/systemd/system/graphical.target.wants/download-provider.service
+%{_libdir}/systemd/system/download-provider.socket
+%{_libdir}/systemd/system/sockets.target.wants/download-provider.socket
 %{_libdir}/libdownload-provider-interface.so.%{version}
 %{_libdir}/libdownload-provider-interface.so.0
 %{_bindir}/%{name}
