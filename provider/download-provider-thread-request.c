@@ -361,7 +361,6 @@ static int __dp_check_valid_directory(dp_request *request, char *dir)
 				== (S_IROTH | S_IWOTH)) {
 			ret = 0;
 		}
-
 	}
 
 	if (ret != 0)
@@ -369,11 +368,19 @@ static int __dp_check_valid_directory(dp_request *request, char *dir)
 
 	ret_val = smack_getlabel(dir, &dir_label, SMACK_LABEL_ACCESS);
 	if (ret_val != 0) {
-		TRACE_SECURE_ERROR("[ERROR][%d][SMACK ERROR", request->id);
+		TRACE_SECURE_ERROR("[ERROR][%d][SMACK ERROR]", request->id);
 		free(dir_label);
 		return -1;
 	}
-	ret_val = smack_have_access(request->credential.smack_label,
+
+	if (request->group == NULL ||
+			request->group->smack_label == NULL) {
+		TRACE_SECURE_ERROR("[ERROR][%d]NULL Check", request->id);
+		free(dir_label);
+		return -1;
+	}
+
+	ret_val = smack_have_access(request->group->smack_label,
 			dir_label, "rw");
 	if (ret_val == 0) {
 		TRACE_SECURE_ERROR("[ERROR][%d][SMACK NO RULE]", request->id);
@@ -658,6 +665,8 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 	int i = 0;
 	struct timeval tv_timeo; // 2.5 sec
 	char *pkgname = NULL;
+	char *smack_label = NULL;
+	int ret = 0;
 
 	tv_timeo.tv_sec = 2;
 	tv_timeo.tv_usec = 500000;
@@ -735,6 +744,14 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 		free(pkgname);
 		return -1;
 	}
+
+	ret = smack_new_label_from_socket(clientfd, &smack_label);
+	if (ret != 0) {
+		TRACE_ERROR("[CRITICAL] cannot get smack label");
+		free(smack_label);
+		return -1;
+	}
+	TRACE_SECURE_INFO("credential label:[%s]", smack_label);
 	// fill info
 	groups[i].group->cmd_socket = clientfd;
 	groups[i].group->event_socket = -1;
@@ -743,7 +760,7 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 	groups[i].group->credential.pid = credential.pid;
 	groups[i].group->credential.uid = credential.uid;
 	groups[i].group->credential.gid = credential.gid;
-	groups[i].group->credential.smack_label = dp_strdup(credential.smack_label);
+	groups[i].group->smack_label = smack_label;
 	TRACE_SECURE_INFO("New Group: slot:%d pid:%d sock:%d [%s]", i,
 		credential.pid, clientfd, pkgname);
 	free(pkgname);
@@ -1441,7 +1458,6 @@ void *dp_thread_requests_manager(void *arg)
 		credential.pid = -1;
 		credential.uid = -1;
 		credential.gid = -1;
-		credential.smack_label = NULL;
 		is_timeout = 1;
 
 		rset = listen_fdset;
@@ -1517,19 +1533,6 @@ void *dp_thread_requests_manager(void *arg)
 			credential.uid = 5000;
 			credential.gid = 5000;
 #endif
-			char *label = NULL;
-			int ret = 0;
-			ret = smack_new_label_from_socket(clientfd, &label);
-			if (ret != 0) {
-				TRACE_ERROR("[CRITICAL] cannot get smack label");
-				close(clientfd);
-				continue;
-			}
-			if (label)
-				credential.smack_label = dp_strdup(label);
-			TRACE_SECURE_INFO("credential label:[%s]", credential.smack_label);
-			free(label);
-
 			switch(connect_cmd) {
 			case DP_CMD_SET_COMMAND_SOCKET:
 				if (__dp_set_group_new(clientfd, privates->groups,

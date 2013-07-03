@@ -305,9 +305,11 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 			char *content_name = NULL;
 			char *dir_path = NULL;
 			char *dir_label = NULL;
-			char *smack_label = request->credential.smack_label;;
+			char *smack_label = NULL;
 			size_t len = 0;
 			int ret = 0;
+			if (request->group != NULL)
+				smack_label = request->group->smack_label;
 			str = strrchr(info->saved_path, '/');
 			if (str) {
 				str++;
@@ -339,9 +341,9 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 						free(dir_label);
 						ret = smack_getlabel(dir_path, &dir_label,
 								SMACK_LABEL_ACCESS);
-						if (ret == 0) {
+						if (ret == 0 && smack_label != NULL) {
 							ret = smack_have_access(
-									request->credential.smack_label,
+									smack_label,
 									dir_label, "t");
 							if (ret > 0) {
 								smack_label = dir_label;
@@ -358,9 +360,14 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 				}
 
 			}
-			ret = smack_setlabel(info->saved_path, smack_label, SMACK_LABEL_ACCESS);
-			if (ret != 0) {
-				TRACE_SECURE_ERROR("[%d][SMACK ERROR]", request_id);
+			if (smack_label != NULL) {
+				ret = smack_setlabel(info->saved_path, smack_label, SMACK_LABEL_ACCESS);
+				if (ret != 0) {
+					TRACE_SECURE_ERROR("[%d][SMACK ERROR]", request_id);
+					errorcode = DP_ERROR_PERMISSION_DENIED;
+				}
+			} else {
+				TRACE_SECURE_ERROR("[%d]NULL Check:smack label", request_id);
 				errorcode = DP_ERROR_PERMISSION_DENIED;
 			}
 

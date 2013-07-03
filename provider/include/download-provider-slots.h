@@ -28,7 +28,6 @@ typedef struct {
 	pid_t pid;
 	uid_t uid;
 	gid_t gid;
-	char *smack_label;
 } dp_credential;
 
 typedef struct {
@@ -40,6 +39,7 @@ typedef struct {
 	// fill by app-manager
 	char *pkgname;
 	dp_credential credential;
+	char *smack_label;
 } dp_client_group;
 
 typedef struct {
