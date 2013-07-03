@@ -21,9 +21,10 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
-
+#include <string.h>
 #include <dlfcn.h> // dlopen
 
+#include <sys/smack.h>
 #include "download-provider.h"
 #include "download-provider-log.h"
 #include "download-provider-pthread.h"
@@ -302,7 +303,11 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 		if (info->saved_path) {
 			char *str = NULL;
 			char *content_name = NULL;
-
+			char *dir_path = NULL;
+			char *dir_label = NULL;
+			char *smack_label = request->credential.smack_label;;
+			size_t len = 0;
+			int ret = 0;
 			str = strrchr(info->saved_path, '/');
 			if (str) {
 				str++;
@@ -314,6 +319,55 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 				("[chown][%d] [%d][%d]", request_id, cred.uid, cred.gid);
 			if (chown(info->saved_path, cred.uid, cred.gid) < 0)
 				TRACE_STRERROR("[ERROR][%d] chown", request_id);
+			if (chmod(info->saved_path,
+					S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) < 0)
+				TRACE_STRERROR("[ERROR][%d] chmod", request_id);
+
+			len = str - (info->saved_path) -1;
+			dir_path = (char *)calloc(len + 1, sizeof(char));
+			if (dir_path) {
+				strncpy(dir_path, info->saved_path, len);
+				TRACE_SECURE_INFO("[PARSE][%d] dir path [%s]",
+									request_id, dir_path);
+				ret = smack_getlabel(dir_path, &dir_label,
+						SMACK_LABEL_TRANSMUTE);
+				if (ret == 0 && dir_label) {
+					ret = strncmp(dir_label, "TRUE", strlen(dir_label));
+					TRACE_SECURE_INFO("[SMACK][%d] transmute label [%s]",
+							request_id, dir_path);
+					if (ret == 0) {
+						free(dir_label);
+						ret = smack_getlabel(dir_path, &dir_label,
+								SMACK_LABEL_ACCESS);
+						if (ret == 0) {
+							ret = smack_have_access(
+									request->credential.smack_label,
+									dir_label, "t");
+							if (ret > 0) {
+								smack_label = dir_label;
+							} else {
+								TRACE_SECURE_ERROR("[%d][SMACK ERROR]ret[%d]",
+										request_id, ret);
+								errorcode = DP_ERROR_PERMISSION_DENIED;
+							}
+						} else {
+							TRACE_SECURE_ERROR("[%d][SMACK ERROR]", request_id);
+							errorcode = DP_ERROR_PERMISSION_DENIED;
+						}
+					}
+				}
+
+			}
+			ret = smack_setlabel(info->saved_path, smack_label, SMACK_LABEL_ACCESS);
+			if (ret != 0) {
+				TRACE_SECURE_ERROR("[%d][SMACK ERROR]", request_id);
+				errorcode = DP_ERROR_PERMISSION_DENIED;
+			}
+
+			free(dir_label);
+			free(dir_path);
+			smack_label = NULL;
+
 			if (dp_db_replace_column
 					(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
 					DP_DB_COL_SAVED_PATH,
@@ -330,10 +384,11 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 			}
 			if (content_name != NULL)
 				free(content_name);
-
-			errorcode = DP_ERROR_NONE;
-			state = DP_STATE_COMPLETED;
-
+			if (errorcode == DP_ERROR_NONE) {
+				state = DP_STATE_COMPLETED;
+			} else {
+				state = DP_STATE_FAILED;
+			}
 			TRACE_SECURE_INFO("[COMPLETED][%d] saved to [%s]",
 					request_id, info->saved_path);
 		} else {

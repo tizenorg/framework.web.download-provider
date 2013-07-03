@@ -29,6 +29,7 @@ BuildRequires:  pkgconfig(notification)
 BuildRequires:  pkgconfig(appsvc)
 BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(wifi-direct)
+BuildRequires:  pkgconfig(libsmack)
 BuildRequires:  gettext-devel
 BuildRequires:  pkgconfig(libsystemd-daemon)
 

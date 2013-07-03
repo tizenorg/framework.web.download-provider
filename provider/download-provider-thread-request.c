@@ -24,10 +24,12 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include <signal.h>
 
 #include <app_manager.h>
+#include <sys/smack.h>
 
 #include "download-provider.h"
 #include "download-provider-log.h"
@@ -336,6 +338,54 @@ static void __dp_remove_tmpfile(int id, dp_request *request)
 			TRACE_STRERROR("[ERROR][%d] remove file", id);
 	}
 	free(path);
+}
+
+static int __dp_check_valid_directory(dp_request *request, char *dir)
+{
+	int ret = -1;
+	int ret_val = 0;
+	char *dir_label = NULL;
+	struct stat dir_state;
+
+	ret_val = stat(dir, &dir_state);
+	if (ret_val == 0) {
+		if (dir_state.st_uid == request->credential.uid
+				&& (dir_state.st_mode & (S_IRUSR | S_IWUSR))
+				== (S_IRUSR | S_IWUSR)) {
+			ret = 0;
+		} else if (dir_state.st_gid == request->credential.gid
+				&& (dir_state.st_mode & (S_IRGRP | S_IWGRP))
+				== (S_IRGRP | S_IWGRP)) {
+			ret = 0;
+		} else if ((dir_state.st_mode & (S_IROTH | S_IWOTH))
+				== (S_IROTH | S_IWOTH)) {
+			ret = 0;
+		}
+
+	}
+
+	if (ret != 0)
+		return ret;
+
+	ret_val = smack_getlabel(dir, &dir_label, SMACK_LABEL_ACCESS);
+	if (ret_val != 0) {
+		TRACE_SECURE_ERROR("[ERROR][%d][SMACK ERROR", request->id);
+		free(dir_label);
+		return -1;
+	}
+	ret_val = smack_have_access(request->credential.smack_label,
+			dir_label, "rw");
+	if (ret_val == 0) {
+		TRACE_SECURE_ERROR("[ERROR][%d][SMACK NO RULE]", request->id);
+		free(dir_label);
+		return -1;
+	} else if (ret_val < 0){
+		TRACE_SECURE_ERROR("[ERROR][%d][SMACK ERROR]", request->id);
+		free(dir_label);
+		return -1;
+	}
+	free(dir_label);
+	return ret;
 }
 
 static int __dp_call_cancel_agent(dp_request *request)
@@ -693,6 +743,7 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 	groups[i].group->credential.pid = credential.pid;
 	groups[i].group->credential.uid = credential.uid;
 	groups[i].group->credential.gid = credential.gid;
+	groups[i].group->credential.smack_label = dp_strdup(credential.smack_label);
 	TRACE_SECURE_INFO("New Group: slot:%d pid:%d sock:%d [%s]", i,
 		credential.pid, clientfd, pkgname);
 	free(pkgname);
@@ -1015,6 +1066,10 @@ static dp_error_type __dp_do_set_command(int sock, dp_command* cmd, dp_request *
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
 		}
+		if (__dp_check_valid_directory(request, read_str) != 0){
+			errorcode = DP_ERROR_PERMISSION_DENIED;
+			break;
+		}
 		errorcode = dp_request_set_destination(cmd->id, request, read_str);
 		break;
 	case DP_CMD_SET_FILENAME:
@@ -1332,7 +1387,6 @@ static dp_error_type __do_dp_start_command(int sock, int id, dp_privates *privat
 			request->error = DP_ERROR_NONE;
 			dp_db_update_date(id, DP_DB_TABLE_LOG, DP_DB_COL_ACCESS_TIME);
 		}
-
 	}
 
 	dp_ipc_send_errorcode(sock, errorcode);
@@ -1387,6 +1441,7 @@ void *dp_thread_requests_manager(void *arg)
 		credential.pid = -1;
 		credential.uid = -1;
 		credential.gid = -1;
+		credential.smack_label = NULL;
 		is_timeout = 1;
 
 		rset = listen_fdset;
@@ -1462,6 +1517,18 @@ void *dp_thread_requests_manager(void *arg)
 			credential.uid = 5000;
 			credential.gid = 5000;
 #endif
+			char *label = NULL;
+			int ret = 0;
+			ret = smack_new_label_from_socket(clientfd, &label);
+			if (ret != 0) {
+				TRACE_ERROR("[CRITICAL] cannot get smack label");
+				close(clientfd);
+				continue;
+			}
+			if (label)
+				credential.smack_label = dp_strdup(label);
+			TRACE_SECURE_INFO("credential label:[%s]", credential.smack_label);
+			free(label);
 
 			switch(connect_cmd) {
 			case DP_CMD_SET_COMMAND_SOCKET:

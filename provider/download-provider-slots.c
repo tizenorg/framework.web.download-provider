@@ -109,6 +109,7 @@ int dp_request_free(dp_request *request)
 	if (request == NULL)
 		return -1;
 	free(request->packagename);
+	free(request->credential.smack_label);
 	dp_request_init(request);
 	free(request);
 	return 0;
@@ -126,6 +127,7 @@ int dp_client_group_free(dp_client_group *group)
 		group->event_socket = -1;
 		group->queued_count = 0;
 		free(group->pkgname);
+		free(group->credential.smack_label);
 		free(group);
 	}
 	return 0;

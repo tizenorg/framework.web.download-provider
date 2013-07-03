@@ -28,6 +28,7 @@ typedef struct {
 	pid_t pid;
 	uid_t uid;
 	gid_t gid;
+	char *smack_label;
 } dp_credential;
 
 typedef struct {

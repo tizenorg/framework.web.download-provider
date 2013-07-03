@@ -20,6 +20,7 @@ pkg_check_modules(dp2_pkgs REQUIRED glib-2.0
 		appsvc
 		dbus-1
 		bundle
+		libsmack
 		dlog
 		libsystemd-daemon)
 

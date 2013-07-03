@@ -196,7 +196,11 @@ dp_error_type dp_request_create(int id, dp_client_group *group, dp_request **emp
 	new_request->group = group;
 	if (group->pkgname && strlen(group->pkgname) > 1)
 		new_request->packagename = dp_strdup(group->pkgname);
-	new_request->credential = group->credential;
+	new_request->credential.uid = group->credential.uid;
+	new_request->credential.gid = group->credential.gid;
+	new_request->credential.pid = group->credential.pid;
+	new_request->credential.smack_label = dp_strdup(
+			group->credential.smack_label);
 	if (new_request->packagename == NULL) {
 		dp_request_free(new_request);
 		TRACE_ERROR("[ERROR][%d] OUT_OF_MEMORY [PACKAGENAME]", id);
