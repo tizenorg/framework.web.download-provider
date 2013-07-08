@@ -23,6 +23,7 @@
 char *dp_print_state(dp_state_type state);
 char *dp_print_errorcode(dp_error_type errorcode);
 
+int dp_is_smackfs_mounted(void);
 char *dp_strdup(char *src);
 
 dp_error_type dp_request_create(int id, dp_client_group *group, dp_request** empty_slot);
