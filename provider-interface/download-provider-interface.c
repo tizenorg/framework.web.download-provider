@@ -834,6 +834,18 @@ static int __connect_to_provider()
 			g_interface_info = NULL;
 			return DP_ERROR_IO_ERROR;
 		}
+		if (__ipc_send_int(g_interface_info->cmd_socket, getuid()) < 0) {
+			close(g_interface_info->cmd_socket);
+			free(g_interface_info);
+			g_interface_info = NULL;
+			return DP_ERROR_IO_ERROR;
+		}
+		if (__ipc_send_int(g_interface_info->cmd_socket, getgid()) < 0) {
+			close(g_interface_info->cmd_socket);
+			free(g_interface_info);
+			g_interface_info = NULL;
+			return DP_ERROR_IO_ERROR;
+		}
 #endif
 		g_interface_info->event_socket = __create_socket();
 		if (g_interface_info->event_socket < 0) {

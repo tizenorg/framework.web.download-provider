@@ -1525,8 +1525,18 @@ void *dp_thread_requests_manager(void *arg)
 				continue;
 			}
 			credential.pid = client_pid;
-			credential.uid = 5000;
-			credential.gid = 5000;
+			if (dp_ipc_read_custom_type(clientfd,
+					&credential.uid, sizeof(int)) < 0) {
+				TRACE_ERROR("[CRITICAL] not support SO_PEERCRED");
+				close(clientfd);
+				continue;
+			}
+			if (dp_ipc_read_custom_type(clientfd,
+					&credential.gid, sizeof(int)) < 0) {
+				TRACE_ERROR("[CRITICAL] not support SO_PEERCRED");
+				close(clientfd);
+				continue;
+			}
 #endif
 			switch(connect_cmd) {
 			case DP_CMD_SET_COMMAND_SOCKET:
