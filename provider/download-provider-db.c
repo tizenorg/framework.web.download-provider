@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <db-util.h>
-
 #include <string.h>
 #include <errno.h>
+
+#include <sqlite3.h>
 
 #include "download-provider-config.h"
 #include "download-provider-db.h"
@@ -49,26 +49,20 @@ void dp_db_close()
 {
 	if (g_dp_db_handle) {
 		sqlite3_exec(g_dp_db_handle, "VACUUM;", 0, 0, 0); // remove empty page of db
-		db_util_close(g_dp_db_handle);
+		sqlite3_close(g_dp_db_handle);
 	}
 	g_dp_db_handle = 0;
 }
 
-// called when launching process or in every API
-int dp_db_open()
+static void __load_sql_schema()
 {
-	if (g_dp_db_handle == 0) {
-		if (db_util_open(DATABASE_FILE, &g_dp_db_handle,
-				DB_UTIL_REGISTER_HOOK_METHOD) != SQLITE_OK) {
-			TRACE_ERROR("failed db_util_open [%s][%s]", DATABASE_FILE,
-				sqlite3_errmsg(g_dp_db_handle));
-			dp_db_close();
-			return -1;
-		}
-		sqlite3_exec(g_dp_db_handle, "PRAGMA journal_mode=PERSIST;", 0, 0, 0);
-		sqlite3_exec(g_dp_db_handle, "PRAGMA foreign_keys=ON;", 0, 0, 0);
+	char *rebuild_query =
+		sqlite3_mprintf("sqlite3 %s '.read %s'", DATABASE_FILE, DATABASE_SCHEMA_FILE);
+	if (rebuild_query != NULL) {
+		TRACE_SECURE_INFO("[QUERY] %s", rebuild_query);
+		system(rebuild_query);
+		sqlite3_free(rebuild_query);
 	}
-	return g_dp_db_handle ? 0 : -1;
 }
 
 static int __dp_sql_open()
@@ -81,6 +75,76 @@ static void __dp_finalize(sqlite3_stmt *stmt)
 	if (sqlite3_finalize(stmt) != SQLITE_OK)
 		TRACE_ERROR("failed sqlite3_finalize [%s]",
 			sqlite3_errmsg(g_dp_db_handle));
+}
+
+static int __check_table(char *table)
+{
+	//"SELECT name FROM sqlite_master WHERE type='table' AND name='" + table +"'";
+	sqlite3_stmt *stmt = NULL;
+
+	if (table == NULL) {
+		TRACE_ERROR("[CHECK TABLE NAME]");
+		return -1;
+	}
+
+	if (__dp_sql_open() < 0) {
+		TRACE_ERROR("[OPEN] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	char *query = sqlite3_mprintf("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'", table);
+	if (query == NULL) {
+		TRACE_ERROR("[CHECK COMBINE]");
+		return -1;
+	}
+	TRACE_SECURE_INFO("[QUERY] %s", query);
+
+	int ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
+	sqlite3_free(query);
+	if (ret != SQLITE_OK) {
+		TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return -1;
+	}
+	if (sqlite3_step(stmt) == SQLITE_ROW) {
+		__dp_finalize(stmt);
+		return 1;
+	}
+	__dp_finalize(stmt);
+	return 0;
+}
+
+// called when launching process or in every API
+int dp_db_open()
+{
+	if (g_dp_db_handle == 0) {
+		TRACE_SECURE_INFO("TRY to open [%s]", DATABASE_FILE);
+		if (sqlite3_open_v2(DATABASE_FILE, &g_dp_db_handle,
+				SQLITE_OPEN_READWRITE, NULL) != SQLITE_OK) {
+			TRACE_ERROR("[ERROR][%s][%s]", DATABASE_FILE,
+				sqlite3_errmsg(g_dp_db_handle));
+			int errorcode = sqlite3_errcode(g_dp_db_handle);
+			dp_db_close();
+			if (errorcode == SQLITE_CORRUPT) {
+				TRACE_SECURE_INFO("unlink [%s]", DATABASE_FILE);
+				unlink(DATABASE_FILE);
+				errorcode = SQLITE_CANTOPEN;
+			}
+			if (errorcode == SQLITE_CANTOPEN) {
+				__load_sql_schema();
+				return dp_db_open();
+			}
+			return -1;
+		}
+		sqlite3_exec(g_dp_db_handle, "PRAGMA journal_mode=PERSIST;", 0, 0, 0);
+		sqlite3_exec(g_dp_db_handle, "PRAGMA foreign_keys=ON;", 0, 0, 0);
+
+		// if not found group table. load again. (FOTA)
+		// new table(groups) created by smack_label. 2013.07.09
+		if (__check_table(DP_DB_TABLE_GROUPS) == 0)
+			__load_sql_schema();
+	}
+	return g_dp_db_handle ? 0 : -1;
 }
 
 int dp_db_is_full_error()

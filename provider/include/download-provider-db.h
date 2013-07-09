@@ -30,6 +30,19 @@
  * 				notification	: id, noti_enable, extra_key, extra_data
  */
 /*
+CREATE TABLE IF NOT EXISTS groups
+(
+        id             INTEGER UNIQUE PRIMARY KEY,
+        uid            INTEGER DEFAULT 0,
+        gid            INTEGER DEFAULT 0,
+        extra_int      INTEGER DEFAULT 0,
+        packagename    TEXT DEFAULT NULL,
+        smack_label    TEXT DEFAULT NULL,
+        extra          TEXT DEFAULT NULL,
+        date_first_connected DATE,
+        date_last_connected DATE
+);
+
 CREATE TABLE logging
 (
         id              INTEGER UNIQUE PRIMARY KEY,
@@ -87,6 +100,7 @@ CREATE TABLE notification
 CREATE UNIQUE INDEX requests_index ON logging (id, state, errorcode, packagename, createtime, accesstime);
 */
 
+#define DP_DB_TABLE_GROUPS "groups"
 #define DP_DB_TABLE_LOG "logging"
 #define DP_DB_TABLE_REQUEST_INFO "requestinfo"
 #define DP_DB_TABLE_DOWNLOAD_INFO "downloadinfo"
@@ -120,6 +134,12 @@ CREATE UNIQUE INDEX requests_index ON logging (id, state, errorcode, packagename
 #define DP_DB_COL_EXTRA_KEY "extra_key"
 #define DP_DB_COL_DISTINCT_EXTRA_KEY "DISTINCT extra_key"
 #define DP_DB_COL_EXTRA_VALUE "extra_data"
+
+#define DP_DB_GROUPS_COL_UID "uid"
+#define DP_DB_GROUPS_COL_GID "gid"
+#define DP_DB_GROUPS_COL_PKG "packagename"
+#define DP_DB_GROUPS_COL_SMACK_LABEL "smack_label"
+
 
 typedef enum {
 	DP_DB_COL_TYPE_NONE = 0,

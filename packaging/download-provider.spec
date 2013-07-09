@@ -5,7 +5,6 @@ Release:    0
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
 Source0:    %{name}-%{version}.tar.gz
-
 Requires(post): sys-assert
 Requires(post): libdevice-node
 Requires(post): org.tizen.indicator
@@ -19,7 +18,6 @@ BuildRequires:  pkgconfig(dlog)
 BuildRequires:  pkgconfig(libsoup-2.4)
 BuildRequires:  pkgconfig(xdgmime)
 BuildRequires:  pkgconfig(vconf)
-BuildRequires:  pkgconfig(db-util)
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(bundle)
 BuildRequires:  pkgconfig(capi-base-common)
@@ -47,10 +45,13 @@ Description: download the contents in background (developement files)
 %prep
 %setup -q
 
-%define _imagedir /usr/share/download-provider
-%define _localedir /usr/share/download-provider
+%define _data_install_path /usr/share/%{name}
+%define _imagedir %{_data_install_path}/images 
+%define _localedir %{_data_install_path}/locales
+%define _sqlschemadir %{_data_install_path}/sql
 %define _databasedir /opt/usr/dbspace
 %define _databasefile %{_databasedir}/.download-provider.db
+%define _sqlschemafile %{_sqlschemadir}/download-provider-schema.sql
 %define _dbusservicedir /usr/share/dbus-1/services
 %define _licensedir /usr/share/license
 %define _smackruledir /opt/etc/smack/accesses.d
@@ -69,7 +70,9 @@ Description: download the contents in background (developement files)
 		-DPKG_RELEASE=%{release} \\\
 		-DIMAGE_DIR:PATH=%{_imagedir} \\\
 		-DLOCALE_DIR:PATH=%{_localedir} \\\
+		-DDATABASE_SCHEMA_DIR=%{_sqlschemadir} \\\
 		-DDATABASE_FILE:PATH=%{_databasefile} \\\
+		-DDATABASE_SCHEMA_FILE=%{_sqlschemafile} \\\
 		-DDBUS_SERVICE_DIR:PATH=%{_dbusservicedir} \\\
 		-DLICENSE_DIR:PATH=%{_licensedir} \\\
 		-DSMACK_RULE_DIR:PATH=%{_smackruledir} \\\
@@ -91,85 +94,25 @@ make %{?jobs:-j%jobs}
 rm -rf %{buildroot}
 %make_install
 mkdir -p %{buildroot}%{_licensedir}
-
 mkdir -p %{buildroot}%{_libdir}/systemd/system/graphical.target.wants
 mkdir -p %{buildroot}%{_libdir}/systemd/system/sockets.target.wants
 ln -s ../download-provider.service %{buildroot}%{_libdir}/systemd/system/graphical.target.wants/
 ln -s ../download-provider.socket %{buildroot}%{_libdir}/systemd/system/sockets.target.wants/
 
-mkdir -p %{buildroot}/opt/data/%{name}
-mkdir -p %{buildroot}%{_databasedir}
-if [ ! -f %{buildroot}%{_databasefile} ];
-then
-sqlite3 %{buildroot}%{_databasefile} 'PRAGMA journal_mode=PERSIST;
-PRAGMA foreign_keys=ON;
-CREATE TABLE logging
-(
-id INTEGER UNIQUE PRIMARY KEY,
-state INTEGER DEFAULT 0,
-errorcode INTEGER DEFAULT 0,
-startcount INTEGER DEFAULT 0,
-packagename TEXT DEFAULT NULL,
-createtime DATE,
-accesstime DATE
-);
-
-CREATE TABLE requestinfo
-(
-id INTEGER UNIQUE PRIMARY KEY,
-auto_download BOOLEAN DEFAULT 0,
-state_event BOOLEAN DEFAULT 0,
-progress_event BOOLEAN DEFAULT 0,
-noti_enable BOOLEAN DEFAULT 0,
-network_type TINYINT DEFAULT 0,
-filename TEXT DEFAULT NULL,
-destination TEXT DEFAULT NULL,
-url TEXT DEFAULT NULL,
-FOREIGN KEY(id) REFERENCES logging(id) ON DELETE CASCADE
-);
-
-CREATE TABLE downloadinfo
-(
-id INTEGER UNIQUE PRIMARY KEY,
-http_status INTEGER DEFAULT 0,
-content_size UNSIGNED BIG INT DEFAULT 0,
-mimetype VARCHAR(64) DEFAULT NULL,
-content_name TEXT DEFAULT NULL,
-saved_path TEXT DEFAULT NULL,
-tmp_saved_path TEXT DEFAULT NULL,
-etag TEXT DEFAULT NULL,
-FOREIGN KEY(id) REFERENCES logging(id) ON DELETE CASCADE
-);
-
-CREATE TABLE httpheaders
-(
-id INTEGER NOT NULL,
-header_field TEXT DEFAULT NULL,
-header_data TEXT DEFAULT NULL,
-FOREIGN KEY(id) REFERENCES logging(id) ON DELETE CASCADE
-);
-
-CREATE TABLE notification
-(
-id INTEGER NOT NULL,
-extra_key TEXT DEFAULT NULL,
-extra_data TEXT DEFAULT NULL,
-FOREIGN KEY(id) REFERENCES logging(id) ON DELETE CASCADE
-);
-
-CREATE UNIQUE INDEX requests_index ON logging (id, state, errorcode, packagename, createtime, accesstime);
-'
-fi
+mkdir -p %{buildroot}/%{_data_install_path}
 
 %post
-chown root:5000 /opt/usr/dbspace/.download-provider.db
-chown root:5000 /opt/usr/dbspace/.download-provider.db-journal
-chmod 660 /opt/usr/dbspace/.download-provider.db
-chmod 660 /opt/usr/dbspace/.download-provider.db-journal
+mkdir -p %{_databasedir}
+
+if [ ! -f %{_databasefile} ];
+then
+sqlite3 %{_databasefile} '.read %{_sqlschemafile}'
+chmod 660 %{_databasefile}
+chmod 660 %{_databasefile}-journal
+fi
 
 %files
 %defattr(-,root,root,-)
-%dir /opt/data/%{name}
 %manifest download-provider.manifest
 %{_imagedir}/*.png
 %{_imagedir}/*.gif
@@ -186,8 +129,7 @@ chmod 660 /opt/usr/dbspace/.download-provider.db-journal
 %{_licensedir}/%{name}
 %{_dbusservicedir}/org.download-provider.service
 %{_smackruledir}/%{name}.rule
-%attr(660,root,app) /opt/usr/dbspace/.download-provider.db
-%attr(660,root,app) /opt/usr/dbspace/.download-provider.db-journal
+%{_sqlschemafile}
 
 %files devel
 %defattr(-,root,root,-)

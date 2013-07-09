@@ -54,6 +54,8 @@ INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/download-provider.pc DESTINATION ${LIB
 INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/systemd/download-provider.service DESTINATION /usr/lib/systemd/system)
 INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/systemd/download-provider.socket DESTINATION /usr/lib/systemd/system)
 
+INSTALL(FILES ${CMAKE_SOURCE_DIR}/download-provider-schema.sql DESTINATION ${DATABASE_SCHEMA_DIR})
+
 # install images
 INSTALL(DIRECTORY ${CMAKE_SOURCE_DIR}/res/images/ DESTINATION ${IMAGE_DIR}
 		FILES_MATCHING
