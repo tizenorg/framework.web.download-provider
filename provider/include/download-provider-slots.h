@@ -61,7 +61,6 @@ typedef struct {
 	unsigned long long received_size; // progress
 	unsigned long long file_size;
 	char *packagename;
-	dp_credential credential;
 	dp_client_group *group; // indicate dp_client_group included this request
 } dp_request;
 

@@ -188,6 +188,11 @@ int dp_db_get_cond_rows_count(int id, char *table,
 						char *condcolumn, db_column_data_type condtype,
 						void *condvalue);
 
+char *dp_db_cond_get_text(char *table, char *column, char *condcolumn,
+						db_column_data_type condtype, void *condvalue);
+int dp_db_cond_get_int(char *table, char *column, char *condcolumn,
+						db_column_data_type condtype, void *condvalue);
+
 // Special API for http headers
 int dp_db_get_http_headers_list(int id, char **headers);
 

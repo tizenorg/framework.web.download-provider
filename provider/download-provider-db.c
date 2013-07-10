@@ -17,6 +17,7 @@
 #include <string.h>
 #include <errno.h>
 
+#include <stdlib.h>
 #include <sqlite3.h>
 
 #include "download-provider-config.h"
@@ -1241,6 +1242,162 @@ int dp_db_cond_remove(int id, char *table,
 		return 0;
 	}
 	TRACE_ERROR("[SQL] [%s]", sqlite3_errmsg(g_dp_db_handle));
+	__dp_finalize(stmt);
+	return -1;
+}
+
+static int __dp_sql_bind_value(sqlite3_stmt *stmt,
+				db_column_data_type condtype,  void *value, int index)
+{
+	int errorcode = SQLITE_ERROR;
+	int *cast_value = 0;
+
+	if (stmt == NULL)
+		return SQLITE_ERROR;
+
+	switch (condtype) {
+	case DP_DB_COL_TYPE_INT:
+		cast_value = value;
+		errorcode = sqlite3_bind_int(stmt, index, *cast_value);
+		break;
+	case DP_DB_COL_TYPE_INT64:
+#ifdef SQLITE_INT64_TYPE
+		sqlite3_int64 *cast_value = value;
+		errorcode = sqlite3_bind_int64(stmt, index, *cast_value);
+#else
+		cast_value = value;
+		errorcode = sqlite3_bind_int(stmt, index, *cast_value);
+#endif
+		break;
+	case DP_DB_COL_TYPE_TEXT:
+		errorcode =
+			sqlite3_bind_text(stmt, index, (char *)value, -1, SQLITE_STATIC);
+		break;
+	default:
+		errorcode = SQLITE_ERROR;
+		break;
+	}
+	return errorcode;
+}
+
+char *dp_db_cond_get_text(char *table, char *column, char *condcolumn,
+						db_column_data_type condtype, void *condvalue)
+{
+	sqlite3_stmt *stmt = NULL;
+	char *query = NULL;
+	int ret = -1;
+
+	if (table == NULL) {
+		TRACE_ERROR("[CHECK TABLE NAME]");
+		return NULL;
+	}
+
+	if (column == NULL) {
+		TRACE_ERROR("[CHECK COLUMN NAME]");
+		return NULL;
+	}
+	if (condcolumn == NULL) {
+		TRACE_ERROR("[CHECK Condition]");
+		return NULL;
+	}
+
+	if (__dp_sql_open() < 0) {
+		TRACE_ERROR("__dp_sql_open[%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	query = sqlite3_mprintf("SELECT %s FROM %s WHERE %s IS ?",
+			column, table, condcolumn);
+	if (query == NULL) {
+		TRACE_ERROR("[CHECK COMBINE]");
+		return NULL;
+	}
+	TRACE_SECURE_INFO("[QUERY] %s", query);
+	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
+	sqlite3_free(query);
+	if ( ret != SQLITE_OK) {
+		TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return NULL;
+	}
+
+	if (__dp_sql_bind_value(stmt, condtype, condvalue, 1) != SQLITE_OK) {
+		TRACE_ERROR
+			("[BIND][%d][%s]", condtype, sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return NULL;
+	}
+	if (sqlite3_step(stmt) == SQLITE_ROW &&
+			sqlite3_column_type(stmt, 0) == SQLITE_TEXT) {
+		int getbytes = sqlite3_column_bytes(stmt, 0);
+		if (getbytes > 0) {
+			char *getstr = (char *)calloc(getbytes + 1, sizeof(char));
+			if (getstr != NULL) {
+				memcpy(getstr, sqlite3_column_text(stmt, 0),
+					getbytes * sizeof(char));
+				getstr[getbytes] = '\0';
+			}
+			__dp_finalize(stmt);
+			return getstr;
+		}
+	}
+	__dp_finalize(stmt);
+	return NULL;
+}
+
+int dp_db_cond_get_int(char *table, char *column, char *condcolumn,
+						db_column_data_type condtype, void *condvalue)
+{
+	sqlite3_stmt *stmt = NULL;
+	char *query = NULL;
+	int ret = -1;
+
+	if (table == NULL) {
+		TRACE_ERROR("[CHECK TABLE NAME]");
+		return -1;
+	}
+
+	if (column == NULL) {
+		TRACE_ERROR("[CHECK COLUMN NAME]");
+		return -1;
+	}
+	if (condcolumn == NULL) {
+		TRACE_ERROR("[CHECK Condition]");
+		return -1;
+	}
+
+	if (__dp_sql_open() < 0) {
+		TRACE_ERROR("__dp_sql_open[%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	query = sqlite3_mprintf("SELECT %s FROM %s WHERE %s IS ?",
+			column, table, condcolumn);
+	if (query == NULL) {
+		TRACE_ERROR("[CHECK COMBINE]");
+		return -1;
+	}
+	TRACE_SECURE_INFO("[QUERY] %s", query);
+	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
+	sqlite3_free(query);
+	if ( ret != SQLITE_OK) {
+		TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return -1;
+	}
+
+	if (__dp_sql_bind_value(stmt, condtype, condvalue, 1) != SQLITE_OK) {
+		TRACE_ERROR
+			("[BIND][%d][%s]", condtype, sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return -1;
+	}
+	if (sqlite3_step(stmt) == SQLITE_ROW &&
+			sqlite3_column_type(stmt, 0) == SQLITE_INTEGER) {
+		int columnvalue = sqlite3_column_int(stmt, 0);
+		__dp_finalize(stmt);
+		return columnvalue;
+	}
 	__dp_finalize(stmt);
 	return -1;
 }

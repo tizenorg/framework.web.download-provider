@@ -205,7 +205,6 @@ dp_error_type dp_request_create(int id, dp_client_group *group, dp_request **emp
 	new_request->group = group;
 	if (group->pkgname != NULL && strlen(group->pkgname) > 1)
 		new_request->packagename = dp_strdup(group->pkgname);
-	new_request->credential = group->credential;
 	if (new_request->packagename == NULL) {
 		dp_request_free(new_request);
 		TRACE_ERROR("[ERROR][%d] OUT_OF_MEMORY [PACKAGENAME]", id);

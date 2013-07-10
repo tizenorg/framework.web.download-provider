@@ -278,6 +278,66 @@ static void __progress_cb(user_progress_info_t *info, void *user_data)
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 }
 
+static int __is_transmute_smack(char *path)
+{
+	char *dir_label = NULL;
+	int ret = -1;
+	if (smack_getlabel(path, &dir_label, SMACK_LABEL_TRANSMUTE) == 0 &&
+			dir_label != NULL) {
+		if (strncmp(dir_label, "TRUE", strlen(dir_label)) == 0)
+			ret = 0;
+	}
+	free(dir_label);
+	return ret;
+}
+
+static dp_error_type __set_dir_smack_label(char *smack_label, char *dir_path, char *saved_path)
+{
+	if (smack_label == NULL || dir_path== NULL || saved_path == NULL)
+		return DP_ERROR_PERMISSION_DENIED;
+
+	int is_setted_dir_label = 0;
+	dp_error_type errorcode = DP_ERROR_NONE;
+
+	TRACE_SECURE_INFO("[PARSE] dir path [%s]", dir_path);
+	if (__is_transmute_smack(dir_path) < 0) {
+		TRACE_SECURE_INFO("[SMACK] no transmute");
+	} else {
+		char *dir_label = NULL;
+		if (smack_getlabel(dir_path, &dir_label,
+				SMACK_LABEL_ACCESS) == 0) {
+			if (smack_have_access(smack_label, dir_label, "t") > 0) {
+				if (smack_setlabel(saved_path, dir_label,
+						SMACK_LABEL_ACCESS) != 0) {
+					TRACE_SECURE_ERROR("[SMACK ERROR] label:%s",
+						dir_label);
+					errorcode = DP_ERROR_PERMISSION_DENIED;
+				} else {
+					is_setted_dir_label = 1;
+				}
+			} else {
+				TRACE_SECURE_ERROR("[SMACK ERROR] access:%s/%s",
+					smack_label, dir_label);
+				errorcode = DP_ERROR_PERMISSION_DENIED;
+			}
+		} else {
+			TRACE_SECURE_ERROR("[SMACK ERROR] no label:", dir_path);
+			errorcode = DP_ERROR_PERMISSION_DENIED;
+		}
+		free(dir_label);
+	}
+	if (is_setted_dir_label == 0 &&
+			smack_setlabel(saved_path, smack_label,
+				SMACK_LABEL_ACCESS) != 0) {
+		TRACE_SECURE_ERROR("[SMACK ERROR] label:%s", smack_label);
+		errorcode = DP_ERROR_PERMISSION_DENIED;
+		// remove file.
+		if (dp_is_file_exist(saved_path) == 0)
+			unlink(saved_path);
+	}
+	return errorcode;
+}
+
 static void __finished_cb(user_finished_info_t *info, void *user_data)
 {
 	if (!info) {
@@ -306,7 +366,6 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 	}
 
 	int request_id = request->id;
-	dp_credential cred = request->credential;
 	dp_state_type state = DP_STATE_NONE;
 	dp_error_type errorcode = DP_ERROR_NONE;
 
@@ -325,19 +384,26 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 		if (info->saved_path) {
 			char *str = NULL;
 			char *content_name = NULL;
-			char *dir_path = NULL;
-			char *dir_label = NULL;
 			char *smack_label = NULL;
-			size_t len = 0;
-			int ret = 0;
-			if (request->group != NULL)
-				smack_label = request->group->smack_label;
 			str = strrchr(info->saved_path, '/');
-			if (str) {
+			if (str != NULL) {
 				str++;
 				content_name = dp_strdup(str);
 				TRACE_SECURE_INFO("[PARSE][%d] content_name [%s]",
 					request_id, content_name);
+			}
+			dp_credential cred;
+			if (request->group == NULL) {
+				cred.uid = dp_db_cond_get_int(DP_DB_TABLE_GROUPS,
+							DP_DB_GROUPS_COL_UID,
+							DP_DB_GROUPS_COL_PKG,
+							DP_DB_COL_TYPE_TEXT, request->packagename);
+				cred.gid = dp_db_cond_get_int(DP_DB_TABLE_GROUPS,
+							DP_DB_GROUPS_COL_GID,
+							DP_DB_GROUPS_COL_PKG,
+							DP_DB_COL_TYPE_TEXT, request->packagename);
+			} else {
+				cred = request->group->credential;
 			}
 			TRACE_INFO
 				("[chown][%d] [%d][%d]", request_id, cred.uid, cred.gid);
@@ -346,57 +412,36 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 			if (chmod(info->saved_path,
 					S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) < 0)
 				TRACE_STRERROR("[ERROR][%d] chmod", request_id);
-
-			len = str - (info->saved_path) -1;
-			dir_path = (char *)calloc(len + 1, sizeof(char));
-			if (dir_path) {
-				strncpy(dir_path, info->saved_path, len);
-				TRACE_SECURE_INFO("[PARSE][%d] dir path [%s]",
-									request_id, dir_path);
-				ret = smack_getlabel(dir_path, &dir_label,
-						SMACK_LABEL_TRANSMUTE);
-				if (ret == 0 && dir_label) {
-					ret = strncmp(dir_label, "TRUE", strlen(dir_label));
-					TRACE_SECURE_INFO("[SMACK][%d] transmute label [%s]",
-							request_id, dir_path);
-					if (ret == 0) {
-						free(dir_label);
-						dir_label = NULL;
-						ret = smack_getlabel(dir_path, &dir_label,
-								SMACK_LABEL_ACCESS);
-						if (ret == 0 && smack_label != NULL &&
-								dir_label != NULL) {
-							ret = smack_have_access(smack_label,
-								dir_label, "t");
-							if (ret > 0) {
-								smack_label = dir_label;
-							} else {
-								TRACE_SECURE_ERROR("[%d][SMACK ERROR]ret[%d]",
-										request_id, ret);
-								errorcode = DP_ERROR_PERMISSION_DENIED;
-							}
-						} else {
-							TRACE_SECURE_ERROR("[%d][SMACK ERROR]", request_id);
-							errorcode = DP_ERROR_PERMISSION_DENIED;
-						}
-					}
+			if (dp_is_smackfs_mounted() == 1) {
+				if (request->group == NULL) {
+					// get smack_label from sql
+					smack_label =
+						dp_db_cond_get_text(DP_DB_TABLE_GROUPS,
+							DP_DB_GROUPS_COL_SMACK_LABEL,
+							DP_DB_GROUPS_COL_PKG,
+							DP_DB_COL_TYPE_TEXT, request->packagename);
+				} else {
+					smack_label = dp_strdup(request->group->smack_label);
 				}
-
-			}
-			if (smack_label != NULL) {
-				ret = smack_setlabel(info->saved_path, smack_label, SMACK_LABEL_ACCESS);
-				if (ret != 0) {
-					TRACE_SECURE_ERROR("[%d][SMACK ERROR]", request_id);
+				if (smack_label == NULL) {
+					TRACE_SECURE_ERROR("[SMACK][%d] no label", request_id);
 					errorcode = DP_ERROR_PERMISSION_DENIED;
+				} else {
+					size_t len = str - (info->saved_path) -1;
+					char *dir_path = (char *)calloc(len + 1, sizeof(char));
+					if (dir_path != NULL) {
+						strncpy(dir_path, info->saved_path, len);
+						errorcode =
+							__set_dir_smack_label(smack_label, dir_path,
+								info->saved_path);
+						free(dir_path);
+					} else {
+						TRACE_SECURE_ERROR("[ERROR] calloc");
+						errorcode = DP_ERROR_OUT_OF_MEMORY;
+					}
+					free(smack_label);
 				}
-			} else {
-				TRACE_SECURE_ERROR("[%d]NULL Check:smack label", request_id);
-				errorcode = DP_ERROR_PERMISSION_DENIED;
 			}
-
-			free(dir_label);
-			free(dir_path);
-			smack_label = NULL;
 
 			if (dp_db_replace_column
 					(request_id, DP_DB_TABLE_DOWNLOAD_INFO,
@@ -421,11 +466,13 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 				free(content_name);
 			if (errorcode == DP_ERROR_NONE) {
 				state = DP_STATE_COMPLETED;
+				TRACE_SECURE_INFO("[COMPLETED][%d] saved to [%s]",
+					request_id, info->saved_path);
 			} else {
 				state = DP_STATE_FAILED;
-			}
-			TRACE_SECURE_INFO("[COMPLETED][%d] saved to [%s]",
+				TRACE_SECURE_INFO("[FAILED][%d] saved to [%s]",
 					request_id, info->saved_path);
+			}
 		} else {
 			TRACE_ERROR("Cannot enter here");
 			TRACE_ERROR("[ERROR][%d] No SavedPath", request_id);

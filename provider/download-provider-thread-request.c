@@ -316,11 +316,24 @@ static int __dp_check_valid_directory(dp_request *request, char *dir)
 
 	ret_val = stat(dir, &dir_state);
 	if (ret_val == 0) {
-		if (dir_state.st_uid == request->credential.uid
+		dp_credential cred;
+		if (request->group == NULL) {
+			cred.uid = dp_db_cond_get_int(DP_DB_TABLE_GROUPS,
+						DP_DB_GROUPS_COL_UID,
+						DP_DB_GROUPS_COL_PKG,
+						DP_DB_COL_TYPE_TEXT, request->packagename);
+			cred.gid = dp_db_cond_get_int(DP_DB_TABLE_GROUPS,
+						DP_DB_GROUPS_COL_GID,
+						DP_DB_GROUPS_COL_PKG,
+						DP_DB_COL_TYPE_TEXT, request->packagename);
+		} else {
+			cred = request->group->credential;
+		}
+		if (dir_state.st_uid == cred.uid
 				&& (dir_state.st_mode & (S_IRUSR | S_IWUSR))
 				== (S_IRUSR | S_IWUSR)) {
 			ret = 0;
-		} else if (dir_state.st_gid == request->credential.gid
+		} else if (dir_state.st_gid == cred.gid
 				&& (dir_state.st_mode & (S_IRGRP | S_IWGRP))
 				== (S_IRGRP | S_IWGRP)) {
 			ret = 0;
@@ -340,23 +353,27 @@ static int __dp_check_valid_directory(dp_request *request, char *dir)
 		return -1;
 	}
 
-	if (request->group == NULL ||
-			request->group->smack_label == NULL) {
-		TRACE_SECURE_ERROR("[ERROR][%d]NULL Check", request->id);
-		free(dir_label);
-		return -1;
+	char *smack_label = NULL;
+	if (request->group == NULL) {
+		// get smack_label from sql
+		smack_label = dp_db_cond_get_text(DP_DB_TABLE_GROUPS,
+				DP_DB_GROUPS_COL_SMACK_LABEL, DP_DB_GROUPS_COL_PKG,
+				DP_DB_COL_TYPE_TEXT, request->packagename);
+		if (smack_label != NULL) {
+			ret_val = smack_have_access(smack_label, dir_label, "rw");
+			free(smack_label);
+		}
+	} else {
+		if (request->group->smack_label != NULL) {
+			ret_val = smack_have_access(request->group->smack_label, dir_label, "rw");
+		}
 	}
-
-	ret_val = smack_have_access(request->group->smack_label,
-			dir_label, "rw");
 	if (ret_val == 0) {
 		TRACE_SECURE_ERROR("[ERROR][%d][SMACK NO RULE]", request->id);
-		free(dir_label);
-		return -1;
+		ret = -1;
 	} else if (ret_val < 0){
 		TRACE_SECURE_ERROR("[ERROR][%d][SMACK ERROR]", request->id);
-		free(dir_label);
-		return -1;
+		ret = -1;
 	}
 	free(dir_label);
 	return ret;
@@ -717,14 +734,6 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 		return -1;
 	}
 
-	ret = smack_new_label_from_socket(clientfd, &smack_label);
-	if (ret != 0) {
-		TRACE_ERROR("[CRITICAL] cannot get smack label");
-		free(pkgname);
-		free(smack_label);
-		return -1;
-	}
-	TRACE_SECURE_INFO("credential label:[%s]", smack_label);
 	// fill info
 	groups[i].group->cmd_socket = clientfd;
 	groups[i].group->event_socket = -1;
@@ -733,7 +742,47 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 	groups[i].group->credential.pid = credential.pid;
 	groups[i].group->credential.uid = credential.uid;
 	groups[i].group->credential.gid = credential.gid;
-	groups[i].group->smack_label = smack_label;
+
+	int conds_count = 4;
+	db_conds_list_fmt conds_p[conds_count];
+	memset(&conds_p, 0x00, conds_count * sizeof(db_conds_list_fmt));
+	conds_p[0].column = DP_DB_GROUPS_COL_UID;
+	conds_p[0].type = DP_DB_COL_TYPE_INT;
+	conds_p[0].value = &credential.uid;
+	conds_p[1].column = DP_DB_GROUPS_COL_GID;
+	conds_p[1].type = DP_DB_COL_TYPE_INT;
+	conds_p[1].value = &credential.gid;
+	conds_p[2].column = DP_DB_GROUPS_COL_PKG;
+	conds_p[2].type = DP_DB_COL_TYPE_TEXT;
+	conds_p[2].value = pkgname;
+
+	if (dp_is_smackfs_mounted() == 1) {
+		ret = smack_new_label_from_socket(clientfd, &smack_label);
+		if (ret != 0) {
+			TRACE_ERROR("[CRITICAL] cannot get smack label");
+			free(pkgname);
+			free(smack_label);
+			return -1;
+		}
+		TRACE_SECURE_INFO("credential label:[%s]", smack_label);
+		groups[i].group->smack_label = smack_label;
+
+		conds_p[3].column = DP_DB_GROUPS_COL_SMACK_LABEL;
+		conds_p[3].type = DP_DB_COL_TYPE_TEXT;
+		conds_p[3].value = smack_label;
+	} else {
+		conds_count = 3; // ignore smack label
+		groups[i].group->smack_label = NULL;
+	}
+
+	if (dp_db_insert_columns(DP_DB_TABLE_GROUPS, conds_count, conds_p) < 0) {
+		free(pkgname);
+		free(smack_label);
+		if (dp_db_is_full_error() == 0)
+			TRACE_ERROR("[SQLITE_FULL]");
+		return -1;
+	}
+
 	TRACE_SECURE_INFO("New Group: slot:%d pid:%d sock:%d [%s]", i,
 		credential.pid, clientfd, pkgname);
 	free(pkgname);
@@ -1057,7 +1106,8 @@ static dp_error_type __dp_do_set_command(int sock, dp_command* cmd, dp_request *
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
 		}
-		if (__dp_check_valid_directory(request, read_str) != 0){
+		if (dp_is_smackfs_mounted() == 1 &&
+				__dp_check_valid_directory(request, read_str) != 0){
 			errorcode = DP_ERROR_PERMISSION_DENIED;
 			break;
 		}
