@@ -106,7 +106,6 @@ static int __check_table(char *table)
 		TRACE_ERROR("[CHECK COMBINE]");
 		return -1;
 	}
-	TRACE_SECURE_INFO("[QUERY] %s", query);
 
 	int ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
@@ -238,9 +237,6 @@ int dp_db_get_list_by_limit_time(dp_request_slots *requests, int limit)
 		requests[i].request->id = sqlite3_column_int(stmt, 0);
 		// state
 		requests[i].request->state = sqlite3_column_int(stmt, 1);
-
-		TRACE_INFO("ID : %d",  requests[i].request->id);
-		TRACE_INFO("state : %d",  requests[i].request->state);
 		i++;
 	}
 
@@ -321,10 +317,6 @@ int dp_db_crashed_list(dp_request_slots *requests, int limit)
 				requests[i].request->packagename[buffer_length] = '\0';
 			}
 		}
-
-		TRACE_INFO("ID : %d",  requests[i].request->id);
-		TRACE_INFO("state : %d",  requests[i].request->state);
-		TRACE_INFO("packagename : %s",  requests[i].request->packagename);
 		i++;
 	}
 
@@ -552,8 +544,6 @@ static sqlite3_stmt *__prepare_query(sqlite3 *handle,
 		TRACE_ERROR("[CHECK COMBINE] [%s]", query_format);
 		return NULL;
 	}
-
-	TRACE_INFO("[QUERY] %s", query);
 
 	ret = sqlite3_prepare_v2(handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
@@ -936,7 +926,6 @@ char *dp_db_get_text_column(int id, char *table, char *column)
 		__dp_finalize(stmt);
 		return columntext;
 	}
-	TRACE_INFO("[No DATA]");
 	__dp_finalize(stmt);
 	return NULL;
 }
@@ -1050,7 +1039,6 @@ int dp_db_get_int_column(int id, char *table, char *column)
 		__dp_finalize(stmt);
 		return columnvalue;
 	}
-	TRACE_INFO("[No DATA]");
 	__dp_finalize(stmt);
 	return -1;
 }
@@ -1098,7 +1086,6 @@ long long dp_db_get_int64_column(int id, char *table, char *column)
 		__dp_finalize(stmt);
 		return columnvalue;
 	}
-	TRACE_INFO("[No DATA]");
 	__dp_finalize(stmt);
 	return -1;
 }
@@ -1169,8 +1156,6 @@ static sqlite3_stmt *__prepare_cond_query(sqlite3 *handle,
 		TRACE_ERROR("[CHECK COMBINE] [%s]", query_format);
 		return NULL;
 	}
-
-	TRACE_INFO("[QUERY] %s", query);
 
 	ret = sqlite3_prepare_v2(handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
@@ -1410,8 +1395,6 @@ int dp_db_cond_remove(int id, char *table,
 		return -1;
 	}
 
-	TRACE_INFO("[QUERY] %s", query);
-
 	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
 	if ( ret != SQLITE_OK) {
@@ -1528,7 +1511,6 @@ char *dp_db_cond_get_text(char *table, char *column, char *condcolumn,
 		TRACE_ERROR("[CHECK COMBINE]");
 		return NULL;
 	}
-	TRACE_SECURE_INFO("[QUERY] %s", query);
 	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
 	if ( ret != SQLITE_OK) {
@@ -1593,7 +1575,6 @@ int dp_db_cond_get_int(char *table, char *column, char *condcolumn,
 		TRACE_ERROR("[CHECK COMBINE]");
 		return -1;
 	}
-	TRACE_SECURE_INFO("[QUERY] %s", query);
 	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
 	if ( ret != SQLITE_OK) {
@@ -1657,8 +1638,6 @@ int dp_db_get_cond_rows_count(int id, char *table,
 		TRACE_ERROR("[CHECK COMBINE]");
 		return -1;
 	}
-
-	TRACE_INFO("[QUERY] %s", query);
 
 	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
@@ -1834,17 +1813,14 @@ static int __bind_value(sqlite3_stmt *stmt,
 	case DP_DB_COL_TYPE_INT:
 		cast_value = value;
 		errorcode = sqlite3_bind_int(stmt, index, *cast_value);
-		TRACE_INFO("INT %d", *cast_value);
 		break;
 	case DP_DB_COL_TYPE_INT64:
 #ifdef SQLITE_INT64_TYPE
 		sqlite3_int64 *cast_value = value;
 		errorcode = sqlite3_bind_int64(stmt, index, *cast_value);
-		TRACE_INFO("INT %ld", *cast_value);
 #else
 		cast_value = value;
 		errorcode = sqlite3_bind_int(stmt, index, *cast_value);
-		TRACE_INFO("INT %d", *cast_value);
 #endif
 		break;
 	case DP_DB_COL_TYPE_TEXT:
@@ -1900,8 +1876,6 @@ int dp_db_insert_columns(char *table, int column_count,
 		return -1;
 	}
 	TRACE_DEBUG("query:%s", query);
-
-	TRACE_INFO("[QUERY] %s", query);
 
 	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
@@ -2052,8 +2026,6 @@ int dp_db_get_conds_rows_count(char *table,
 		return -1;
 	}
 
-	TRACE_INFO("[QUERY] %s", query);
-
 	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
 	if (ret != SQLITE_OK) {
@@ -2148,7 +2120,6 @@ int dp_db_get_conds_list(char *table, char *getcolumn,
 		TRACE_ERROR("[CHECK COMBINE]");
 		return -1;
 	}
-	TRACE_INFO("[QUERY] %s", query);
 
 	errorcode =
 		sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);

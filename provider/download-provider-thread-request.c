@@ -1747,7 +1747,6 @@ void *dp_thread_requests_manager(void *arg)
 				// Echo .client can check whether provider is busy
 				if (command.cmd == DP_CMD_ECHO) {
 					// provider can clear read buffer here
-					TRACE_INFO("[ECHO] sock:%d", sock);
 					if (dp_ipc_send_errorcode(sock,
 							DP_ERROR_NONE) < 0) {
 						// disconnect this group, bad client
