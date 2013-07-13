@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <stdio.h>
 #include <string.h>
 #include <errno.h>
 
@@ -44,11 +45,21 @@ typedef enum {
 } db_query_type;
 
 sqlite3 *g_dp_db_handle = 0;
+sqlite3_stmt *g_dp_db_logging_new_stmt = NULL;
+
+static void __dp_finalize(sqlite3_stmt *stmt)
+{
+	if (sqlite3_finalize(stmt) != SQLITE_OK)
+		TRACE_ERROR("failed sqlite3_finalize [%s]",
+			sqlite3_errmsg(g_dp_db_handle));
+}
 
 // called when terminating process
 void dp_db_close()
 {
 	if (g_dp_db_handle) {
+		if (g_dp_db_logging_new_stmt != NULL)
+			__dp_finalize(g_dp_db_logging_new_stmt);
 		sqlite3_exec(g_dp_db_handle, "VACUUM;", 0, 0, 0); // remove empty page of db
 		sqlite3_close(g_dp_db_handle);
 	}
@@ -69,13 +80,6 @@ static void __load_sql_schema()
 static int __dp_sql_open()
 {
 	return dp_db_open();
-}
-
-static void __dp_finalize(sqlite3_stmt *stmt)
-{
-	if (sqlite3_finalize(stmt) != SQLITE_OK)
-		TRACE_ERROR("failed sqlite3_finalize [%s]",
-			sqlite3_errmsg(g_dp_db_handle));
 }
 
 static int __check_table(char *table)
@@ -1303,7 +1307,7 @@ char *dp_db_cond_get_text(char *table, char *column, char *condcolumn,
 
 	if (__dp_sql_open() < 0) {
 		TRACE_ERROR("__dp_sql_open[%s]", sqlite3_errmsg(g_dp_db_handle));
-		return -1;
+		return NULL;
 	}
 
 	query = sqlite3_mprintf("SELECT %s FROM %s WHERE %s IS ?",
@@ -1923,3 +1927,69 @@ int dp_db_get_conds_list(char *table, char *getcolumn,
 	return rows_count;
 }
 
+static void __dp_db_reset(sqlite3_stmt *stmt)
+{
+	if (stmt != 0) {
+		sqlite3_clear_bindings(stmt);
+		if (sqlite3_reset(stmt) != SQLITE_OK) {
+			sqlite3 *handle = sqlite3_db_handle(stmt);
+			TRACE_ERROR("failed sqlite3_reset [%s]",
+				sqlite3_errmsg(handle));
+		}
+	}
+}
+
+int dp_db_request_new_logging(const int id, const int state, const char *pkgname)
+{
+	int errorcode = SQLITE_OK;
+	int ret = -1;
+	char *query = NULL;
+	int i = 0;
+
+	if (__dp_sql_open() < 0) {
+		TRACE_ERROR("[SQL HANDLE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	if (g_dp_db_logging_new_stmt == NULL) {
+		query =
+			sqlite3_mprintf("INSERT INTO %s (%s, %s, %s, %s) VALUES (?, ?, ?, DATETIME('now'))",
+				DP_DB_TABLE_LOG, DP_DB_COL_ID, DP_DB_COL_STATE,
+				DP_DB_COL_PACKAGENAME, DP_DB_COL_CREATE_TIME);
+		if (query == NULL) {
+			TRACE_ERROR("[CHECK COMBINE]");
+			return -1;
+		}
+
+		TRACE_INFO("query:%s", query);
+
+		ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &g_dp_db_logging_new_stmt, NULL);
+		sqlite3_free(query);
+		if ( ret != SQLITE_OK) {
+			TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+			return -1;
+		}
+	}
+	if (sqlite3_bind_int(g_dp_db_logging_new_stmt, 1, id) != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_db_reset(g_dp_db_logging_new_stmt);
+		return -1;
+	}
+	if (sqlite3_bind_int(g_dp_db_logging_new_stmt, 2, state) != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_db_reset(g_dp_db_logging_new_stmt);
+		return -1;
+	}
+	if (sqlite3_bind_text(g_dp_db_logging_new_stmt, 3, pkgname, -1, SQLITE_STATIC) != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_db_reset(g_dp_db_logging_new_stmt);
+		return -1;
+	}
+
+	errorcode = sqlite3_step(g_dp_db_logging_new_stmt);
+	__dp_db_reset(g_dp_db_logging_new_stmt);
+	if (errorcode == SQLITE_OK || errorcode == SQLITE_DONE) {
+		return 0;
+	}
+	return -1;
+}

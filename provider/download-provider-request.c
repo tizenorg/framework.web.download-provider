@@ -212,20 +212,10 @@ dp_error_type dp_request_create(int id, dp_client_group *group, dp_request **emp
 	}
 	new_request->state = DP_STATE_READY;
 	new_request->error = DP_ERROR_NONE;
+	new_request->create_time = (int)time(NULL);
 
-	int conds_count = 3; // id + state + pkgname
-	db_conds_list_fmt conds_p[conds_count];
-	memset(&conds_p, 0x00, conds_count * sizeof(db_conds_list_fmt));
-	conds_p[0].column = DP_DB_COL_ID;
-	conds_p[0].type = DP_DB_COL_TYPE_INT;
-	conds_p[0].value = &new_request->id;
-	conds_p[1].column = DP_DB_COL_STATE;
-	conds_p[1].type = DP_DB_COL_TYPE_INT;
-	conds_p[1].value = &new_request->state;
-	conds_p[2].column = DP_DB_COL_PACKAGENAME;
-	conds_p[2].type = DP_DB_COL_TYPE_TEXT;
-	conds_p[2].value = new_request->packagename;
-	if (dp_db_insert_columns(DP_DB_TABLE_LOG, conds_count, conds_p) < 0) {
+	if (dp_db_request_new_logging(new_request->id, new_request->state,
+			new_request->packagename) < 0) {
 		dp_request_free(new_request);
 		if (dp_db_is_full_error() == 0) {
 			TRACE_ERROR("[SQLITE_FULL]");
@@ -233,12 +223,6 @@ dp_error_type dp_request_create(int id, dp_client_group *group, dp_request **emp
 		}
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
-
-	if (dp_db_update_date(new_request->id, DP_DB_TABLE_LOG,
-			DP_DB_COL_CREATE_TIME) < 0)
-		TRACE_ERROR("[CHECK SQL][%d]", id);
-	new_request->create_time = (int)time(NULL);
-
 	*empty_slot = new_request;
 	return DP_ERROR_NONE;
 }
