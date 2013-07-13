@@ -1,7 +1,7 @@
 Name:       download-provider
 Summary:    download the contents in background.
 Version:    1.0.7
-Release:    1
+Release:    2
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
 Source0:    %{name}-%{version}.tar.gz
@@ -200,6 +200,9 @@ chmod 660 /opt/usr/dbspace/.download-provider.db-journal
 %{_libdir}/pkgconfig/download-provider-interface.pc
 
 %changelog
+* Sat Jul 13 2013 Jungki Kwak <jungki.kwak@samsung.com>
+- Register download notification when client process is exited
+
 * Wed Jul 03 2013 Jungki Kwak <jungki.kwak@samsung.com>
 - Check smack integrity about install directory and downloaded file
 - Change the privilege of systemd configuration
