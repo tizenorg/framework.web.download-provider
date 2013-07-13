@@ -1617,6 +1617,7 @@ void *dp_thread_requests_manager(void *arg)
 			if (group == NULL || group->cmd_socket < 0)
 				continue;
 			const int sock = group->cmd_socket;
+			int time_of_job = (int)time(NULL);
 			if (FD_ISSET(sock, &rset) > 0) {
 				int index = -1;
 				dp_command command;
@@ -1675,12 +1676,12 @@ void *dp_thread_requests_manager(void *arg)
 							&privates->requests[index].request);
 						dp_ipc_send_errorcode(sock, errorcode);
 						if (errorcode == DP_ERROR_NONE) {
-							TRACE_INFO("[CREATE] GOOD id:%d slot:%d",
-								privates->requests[index].request->id,
-								index);
 							dp_ipc_send_custom_type(sock,
 								&privates->requests[index].request->id,
 								sizeof(int));
+							TRACE_INFO("[CREATE] GOOD id:%d slot:%d time:%d",
+								privates->requests[index].request->id,
+								index, ((int)time(NULL) - time_of_job));
 						} else {
 							TRACE_ERROR("[ERROR][%s]",
 								dp_print_errorcode(errorcode));
