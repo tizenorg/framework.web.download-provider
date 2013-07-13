@@ -309,6 +309,14 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 						dp_print_errorcode(errorcode));
 					if (dp_cancel_agent_download(request->agent_id) < 0)
 						TRACE_INFO("[fail][%d]cancel_agent", request->id);
+					if (request->auto_notification && request->packagename != NULL) {
+						request->state = DP_STATE_FAILED;
+						dp_set_downloadedinfo_notification(request->noti_priv_id,
+								request->id, request->packagename, request->state);
+						//reset setting. After unlock mutex, the da callback can be called
+						request->auto_notification = 0;
+					}
+
 				}
 				CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 				dp_request_slot_free(&privates->requests[i]);
@@ -1239,6 +1247,10 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 					if (__dp_call_cancel_agent(request) < 0)
 						TRACE_INFO("[fail][%d]cancel_agent", cmd->id);
 					request->state = DP_STATE_CANCELED;
+					dp_set_downloadedinfo_notification(request->noti_priv_id,
+							request->id, request->packagename, request->state);
+					//reset setting. After unlock mutex, the da callback can be called
+					request->auto_notification = 0;
 				}
 			}
 		}

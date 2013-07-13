@@ -567,7 +567,7 @@ void dp_update_downloadinginfo_notification(int priv_id, double received_size, d
 
 	if (file_size > 0) {
 		double progress;
-		progress = received_size / file_size;
+		progress = (double)received_size / (double)file_size;
 		err = notification_update_progress(NULL, priv_id, progress);
 		if (err != NOTIFICATION_ERROR_NONE)
 			TRACE_ERROR("[FAIL] update noti progress[%s]",
