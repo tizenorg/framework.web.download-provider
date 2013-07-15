@@ -299,7 +299,7 @@ int dp_set_downloadinginfo_notification(int id, char *packagename)
 		return -1;
 	}
 
-	TRACE_INFO("m_noti_id [%d]", privId);
+	TRACE_DEBUG("m_noti_id [%d]", privId);
 	notification_free(noti_handle);
 	return privId;
 }
@@ -567,7 +567,7 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 		return -1;
 	}
 
-	TRACE_INFO("m_noti_id [%d]", privId);
+	TRACE_DEBUG("m_noti_id [%d]", privId);
 	notification_free(noti_handle);
 	return privId;
 }

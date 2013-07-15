@@ -55,8 +55,6 @@ void dp_terminate(int signo)
 
 static gboolean __dp_idle_start_service(void *data)
 {
-	TRACE_INFO("Launch threads .....");
-
 	// declare all resources
 	pthread_t thread_pid;
 	pthread_attr_t thread_attr;
@@ -189,7 +187,7 @@ int main(int argc, char **argv)
 			if (!privates->requests[i].request)
 				continue;
 			dp_request *request = privates->requests[i].request;
-			TRACE_INFO
+			TRACE_DEBUG
 				("ID [%d] state[%d]", request->id, request->state);
 
 			// load to memory, Can be started automatically.
@@ -241,7 +239,7 @@ int main(int argc, char **argv)
 	if (argc != 2 || memcmp(argv[1], "service", 7) != 0) {
 		// in first launch in booting time, not request. terminate by self
 		if (dp_get_request_count(privates->requests) <= 0) {
-			TRACE_INFO("First Boot, No Request");
+			TRACE_DEBUG("First Boot, No Request");
 			goto DOWNLOAD_EXIT;
 		}
 	}
@@ -257,7 +255,7 @@ int main(int argc, char **argv)
 	privates->connection = 0;
 	privates->network_status = DP_NETWORK_TYPE_OFF;
 	if (dp_network_connection_init(privates) < 0) {
-		TRACE_INFO("use instant network check");
+		TRACE_DEBUG("use instant network check");
 		privates->connection = 0;
 	}
 
@@ -272,7 +270,7 @@ int main(int argc, char **argv)
 
 DOWNLOAD_EXIT :
 
-	TRACE_INFO("Download-Provider will be terminated.");
+	TRACE_DEBUG("Download-Provider will be terminated.");
 	if (vconf_ignore_key_changed(VCONFKEY_LANGSET, __lang_changed_cb) != 0)
 		TRACE_ERROR("Fail to unset language changed vconf callback");
 

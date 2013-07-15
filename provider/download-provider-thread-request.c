@@ -267,8 +267,6 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 	int state = DP_STATE_FAILED;
 	int errorcode = DP_ERROR_CLIENT_DOWN;
 
-	TRACE_INFO("");
-
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
 
 		CLIENT_MUTEX_LOCK(&privates->requests[i].mutex);
@@ -288,7 +286,7 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 
 		// if stopped, paused or not started yet, clear request
 		if (__is_started(request->state) < 0) {
-			TRACE_INFO("[FREE][%d] state[%s]", request->id,
+			TRACE_DEBUG("[FREE][%d] state[%s]", request->id,
 				dp_print_state(request->state));
 			CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 			dp_request_slot_free(&privates->requests[i]);
@@ -296,7 +294,7 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 		}
 
 		// disconnect the request from group.
-		TRACE_SECURE_INFO("[DISCONNECT][%d] state:%s pkg:%s sock:%d",
+		TRACE_SECURE_DEBUG("[DISCONNECT][%d] state:%s pkg:%s sock:%d",
 			request->id, dp_print_state(request->state),
 			request->group->pkgname, request->group->cmd_socket);
 		request->group = NULL;
@@ -318,7 +316,7 @@ static void __dp_remove_tmpfile(int id, dp_request *request)
 	if (errorcode == DP_ERROR_NONE &&
 			(path != NULL && strlen(path) > 0) &&
 			dp_is_file_exist(path) == 0) {
-		TRACE_SECURE_INFO("[REMOVE][%d] TEMP FILE [%s]", id, path);
+		TRACE_SECURE_DEBUG("[REMOVE][%d] TEMP FILE [%s]", id, path);
 		if (unlink(path) != 0)
 			TRACE_STRERROR("[ERROR][%d] remove file", id);
 	}
@@ -407,7 +405,7 @@ static int __dp_call_cancel_agent(dp_request *request)
 			if (dp_cancel_agent_download(request->agent_id) == 0)
 				ret = 0;
 		} else {
-			TRACE_INFO("[CHECK] agent-id");
+			TRACE_DEBUG("[CHECK] agent-id");
 		}
 	}
 	return ret;
@@ -435,7 +433,7 @@ static int __dp_add_extra_param(int fd, int id)
 		TRACE_ERROR("[ERROR][%d] [DP_ERROR_IO_ERROR]", id);
 		ret = DP_ERROR_IO_ERROR;
 	} else {
-		TRACE_INFO("[RECV] length %d", length);
+		TRACE_DEBUG("[RECV] length %d", length);
 		if (length <= 0) {
 			ret = DP_ERROR_INVALID_PARAMETER;
 		} else {
@@ -445,7 +443,7 @@ static int __dp_add_extra_param(int fd, int id)
 				ret = DP_ERROR_IO_ERROR;
 			} else {
 				if (length > 1) {
-					TRACE_SECURE_INFO("[RECV] key : %s", key);
+					TRACE_SECURE_DEBUG("[RECV] key : %s", key);
 					// get values
 					values = (char **)calloc((length - 1), sizeof(char *));
 					if (values == NULL) {
@@ -529,7 +527,7 @@ static int __dp_get_extra_param_values(int fd, int id, char ***values,
 		TRACE_ERROR("[ERROR][%d] [DP_ERROR_IO_ERROR]", id);
 		ret = DP_ERROR_IO_ERROR;
 	} else {
-		TRACE_INFO("[RECV] length %d", length);
+		TRACE_DEBUG("[RECV] length %d", length);
 		if (length != 1) { // only a key
 			ret = DP_ERROR_INVALID_PARAMETER;
 		} else {
@@ -607,8 +605,8 @@ static int __dp_remove_extra_param(int fd, int id)
 			ret = DP_ERROR_OUT_OF_MEMORY;
 		}
 	}
-	TRACE_INFO("[ERROR][%d][%s]", id, dp_print_errorcode(ret));
-	TRACE_SECURE_INFO("key:%s", key);
+	TRACE_DEBUG("[ERROR][%d][%s]", id, dp_print_errorcode(ret));
+	TRACE_SECURE_DEBUG("key:%s", key);
 	free(key);
 	return ret;
 }
@@ -686,14 +684,14 @@ static int __dp_set_group_new(int clientfd, dp_group_slots *groups,
 	// getting the package name via pid
 	if (app_manager_get_package(credential.pid, &pkgname) ==
 			APP_MANAGER_ERROR_NONE) {
-		TRACE_SECURE_INFO("package : %s", pkgname);
+		TRACE_SECURE_DEBUG("package : %s", pkgname);
 	} else
 		TRACE_ERROR("[CRITICAL] app_manager_get_package");
 
 	//// TEST CODE ... to allow sample client ( no package name ).
 	if (pkgname == NULL) {
 		pkgname = dp_strdup("unknown_app");
-		TRACE_INFO("default package naming : %s", pkgname);
+		TRACE_DEBUG("default package naming : %s", pkgname);
 	}
 
 	if (pkgname == NULL) {
@@ -813,7 +811,7 @@ static int __dp_set_group_event_sock(int clientfd,
 {
 	int i = 0;
 
-	TRACE_INFO("Check event pid:%d sock:%d", credential.pid, clientfd);
+	TRACE_DEBUG("Check event pid:%d sock:%d", credential.pid, clientfd);
 	// search same pid in groups
 	for (i = 0; i < DP_MAX_GROUP; i++) {
 		if (groups[i].group != NULL &&
@@ -1359,7 +1357,7 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 					errorcode = DP_ERROR_OUT_OF_MEMORY;
 				} else {
 					if (__dp_call_cancel_agent(request) < 0)
-						TRACE_INFO("[fail][%d]cancel_agent", cmd->id);
+						TRACE_ERROR("[fail][%d]cancel_agent", cmd->id);
 					request->state = DP_STATE_CANCELED;
 					dp_set_downloadedinfo_notification(request->noti_priv_id,
 							request->id, request->packagename, request->state);
@@ -1415,7 +1413,7 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 				dp_print_state(request->state));
 			if (dp_pause_agent_download
 					(request->agent_id) < 0) {
-				TRACE_INFO("[fail][%d]pause_agent(%d)",
+				TRACE_ERROR("[fail][%d]pause_agent(%d)",
 					cmd->id, request->agent_id);
 			}
 			request->state = state;
@@ -1445,6 +1443,9 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 		}
 
 		if (__is_stopped(request->state) == 0) {
+			TRACE_ERROR("[%s][%d]__is_stopped agentid:%d state:%s",
+				__print_command(cmd->cmd), cmd->id,
+				request->agent_id, dp_print_state(request->state));
 			errorcode = DP_ERROR_INVALID_STATE;
 		} else {
 			// change state to canceled.
@@ -1458,7 +1459,7 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 				__print_command(cmd->cmd), cmd->id,
 				request->agent_id, dp_print_state(request->state));
 			if (__dp_call_cancel_agent(request) < 0)
-				TRACE_INFO("[fail][%d]cancel_agent", cmd->id);
+				TRACE_ERROR("[fail][%d]cancel_agent", cmd->id);
 			request->state = DP_STATE_CANCELED;
 		}
 		dp_db_update_date(cmd->id, DP_DB_TABLE_LOG, DP_DB_COL_ACCESS_TIME);
@@ -1550,6 +1551,7 @@ static dp_error_type __do_dp_start_command(int sock, int id, dp_privates *privat
 			request->error = DP_ERROR_NONE;
 			dp_db_update_date(id, DP_DB_TABLE_LOG, DP_DB_COL_ACCESS_TIME);
 		}
+
 	}
 
 	dp_ipc_send_errorcode(sock, errorcode);
@@ -1587,7 +1589,7 @@ void *dp_thread_requests_manager(void *arg)
 	listenfd = privates->listen_fd;
 	maxfd = listenfd;
 
-	TRACE_INFO("Ready to listen [%d][%s]", listenfd, DP_IPC);
+	TRACE_DEBUG("Ready to listen [%d][%s]", listenfd, DP_IPC);
 
 	FD_ZERO(&listen_fdset);
 	FD_ZERO(&except_fdset);
@@ -1689,6 +1691,7 @@ void *dp_thread_requests_manager(void *arg)
 				continue;
 			}
 #endif
+
 			switch(connect_cmd) {
 			case DP_CMD_SET_COMMAND_SOCKET:
 				if (__dp_set_group_new(clientfd, privates->groups,
@@ -1747,6 +1750,7 @@ void *dp_thread_requests_manager(void *arg)
 				// Echo .client can check whether provider is busy
 				if (command.cmd == DP_CMD_ECHO) {
 					// provider can clear read buffer here
+					TRACE_DEBUG("[ECHO] sock:%d", sock);
 					if (dp_ipc_send_errorcode(sock,
 							DP_ERROR_NONE) < 0) {
 						// disconnect this group, bad client
@@ -1941,7 +1945,7 @@ void *dp_thread_requests_manager(void *arg)
 		// timeout
 		if (is_timeout == 1) {
 			int now_timeout = (int)time(NULL);
-			TRACE_INFO("[TIMEOUT] prev %ld, now %ld, setted %ld sec",
+			TRACE_DEBUG("[TIMEOUT] prev %ld, now %ld, setted %ld sec",
 				prev_timeout, now_timeout, flexible_timeout);
 			if (prev_timeout == 0) {
 				prev_timeout = now_timeout;
@@ -1969,7 +1973,7 @@ void *dp_thread_requests_manager(void *arg)
 				if (old_request_count > DP_LOG_DB_CLEAR_LIMIT_ONE_TIME)
 					old_request_count = DP_LOG_DB_CLEAR_LIMIT_ONE_TIME;
 
-				TRACE_INFO
+				TRACE_DEBUG
 					("[CLEAR] [%d] old reqeusts", old_request_count);
 
 				dp_request_slots *old_requests =
@@ -1992,7 +1996,7 @@ void *dp_thread_requests_manager(void *arg)
 								continue;
 							}
 							CLIENT_MUTEX_UNLOCK(&privates->requests[index].mutex);
-							TRACE_INFO("[CLEAR][%d] 48 hour state:%s",
+							TRACE_DEBUG("[CLEAR][%d] 48 hour state:%s",
 								request->id,
 								dp_print_state(request->state));
 							// unload from slots ( memory )
@@ -2029,7 +2033,7 @@ void *dp_thread_requests_manager(void *arg)
 				// paused & agent_id not exist.... unload from memory.
 				if (request->state == DP_STATE_PAUSED &&
 						dp_is_alive_download(request->agent_id) == 0) {
-					TRACE_INFO("[FREE][%d] dead agent-id(%d) state:%s",
+					TRACE_DEBUG("[FREE][%d] dead agent-id(%d) state:%s",
 						request->id, request->agent_id,
 						dp_print_state(request->state));
 					CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
@@ -2045,7 +2049,7 @@ void *dp_thread_requests_manager(void *arg)
 					int download_id = request->id;
 					dp_state_type state = DP_STATE_FAILED;
 					errorcode = DP_ERROR_RESPONSE_TIMEOUT;
-					TRACE_INFO
+					TRACE_DEBUG
 						("[FREE][%d] start in %d sec state:%s last:%ld",
 						download_id, DP_CARE_CLIENT_MAX_INTERVAL,
 						dp_print_state(request->state),
@@ -2087,7 +2091,7 @@ void *dp_thread_requests_manager(void *arg)
 						DP_CARE_CLIENT_MAX_INTERVAL) {
 					// check state again. stop_time means it's stopped
 					if (__is_stopped(request->state) == 0) {
-						TRACE_INFO
+						TRACE_DEBUG
 							("[FREE][%d] by timeout state:%s stop:%ld",
 							request->id,
 							dp_print_state(request->state),
@@ -2113,7 +2117,7 @@ void *dp_thread_requests_manager(void *arg)
 				// terminate by self.
 				if ((now_timeout - prev_timeout) >= flexible_timeout &&
 					dp_get_request_count(privates->requests) <= 0) {
-					TRACE_INFO("No Request. Terminate Daemon");
+					TRACE_DEBUG("No Request. Terminate Daemon");
 					break;
 				}
 			}
@@ -2122,7 +2126,7 @@ void *dp_thread_requests_manager(void *arg)
 			prev_timeout = 0;
 		}
 	}
-	TRACE_INFO("terminate main thread ...");
+	TRACE_DEBUG("terminate main thread ...");
 	dp_terminate(SIGTERM);
 	pthread_exit(NULL);
 	return 0;

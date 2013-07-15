@@ -195,7 +195,7 @@ static void *__request_download_start_agent(void *args)
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 
 	if (errcode == DP_ERROR_NONE) {
-		TRACE_INFO("try other requests -----------------");
+		TRACE_DEBUG("try other requests -----------------");
 		dp_thread_queue_manager_wake_up();
 	}
 
@@ -213,7 +213,6 @@ static int __request_download_start_thread(dp_request_slots *request_slot)
 	pthread_t thread_pid;
 	pthread_attr_t thread_attr;
 
-	TRACE_INFO("");
 	if (request_slot == NULL || request_slot->request == NULL) {
 		TRACE_ERROR("[CRITICAL] Invalid Address");
 		return -1;
@@ -247,7 +246,6 @@ static int __request_download_start_thread(dp_request_slots *request_slot)
 
 void dp_thread_queue_manager_wake_up()
 {
-	TRACE_INFO("");
 	CLIENT_MUTEX_LOCK(&(g_dp_queue_mutex));
 	pthread_cond_signal(&g_dp_queue_cond);
 	CLIENT_MUTEX_UNLOCK(&(g_dp_queue_mutex));
@@ -262,8 +260,6 @@ void *dp_thread_queue_manager(void *arg)
 	int active_count;
 	dp_client_group *group = NULL;
 	dp_request *request = NULL;
-
-	TRACE_INFO("Start Queue Thread");
 
 	dp_privates *privates = (dp_privates*)arg;
 	if (!privates) {
@@ -284,7 +280,7 @@ void *dp_thread_queue_manager(void *arg)
 
 		if (privates == NULL || privates->requests == NULL ||
 			privates->listen_fd < 0) {
-			TRACE_INFO("Terminate Thread");
+			TRACE_DEBUG("Terminate Thread");
 			break;
 		}
 
@@ -304,7 +300,7 @@ void *dp_thread_queue_manager(void *arg)
 
 		if (privates->network_status == DP_NETWORK_TYPE_OFF &&
 			privates->is_connected_wifi_direct == 0) {
-			TRACE_INFO("[CHECK NETWORK STATE]");
+			TRACE_DEBUG("[CHECK NETWORK STATE]");
 			continue;
 		}
 
@@ -337,7 +333,7 @@ void *dp_thread_queue_manager(void *arg)
 								request->network_type ==
 									DP_NETWORK_TYPE_WIFI_DIRECT)) {
 							if (__request_download_start_thread(&privates->requests[i]) == 0) {
-								TRACE_INFO
+								TRACE_DEBUG
 									("[Guarantee Intant Download] Group [%s]", group->pkgname);
 								active_count++;
 							}
@@ -364,7 +360,7 @@ void *dp_thread_queue_manager(void *arg)
 				i = __get_oldest_request_with_network(privates->requests,
 						DP_STATE_QUEUED, DP_NETWORK_TYPE_WIFI_DIRECT);
 				if (i >= 0) {
-					TRACE_INFO("Found WIFI-Direct request %d", i);
+					TRACE_DEBUG("Found WIFI-Direct request %d", i);
 					if (__request_download_start_thread(&privates->requests[i]) == 0)
 						active_count++;
 					continue;
@@ -375,12 +371,12 @@ void *dp_thread_queue_manager(void *arg)
 			i = __get_oldest_request_with_network(privates->requests,
 					DP_STATE_QUEUED, privates->network_status);
 			if (i < 0) {
-				TRACE_INFO
+				TRACE_DEBUG
 					("No Request now active[%d] max[%d]",
 					active_count, DP_MAX_DOWNLOAD_AT_ONCE);
 				break;
 			}
-			TRACE_INFO("QUEUE Status now %d active %d/%d", i,
+			TRACE_DEBUG("QUEUE Status now %d active %d/%d", i,
 				active_count, DP_MAX_DOWNLOAD_AT_ONCE);
 			__request_download_start_thread(&privates->requests[i]);
 			active_count++;

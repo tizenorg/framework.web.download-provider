@@ -302,7 +302,7 @@ static dp_error_type __set_dir_smack_label(char *smack_label, char *dir_path, ch
 
 	TRACE_SECURE_INFO("[PARSE] dir path [%s]", dir_path);
 	if (__is_transmute_smack(dir_path) < 0) {
-		TRACE_SECURE_INFO("[SMACK] no transmute");
+		TRACE_DEBUG("[SMACK] no transmute");
 	} else {
 		char *dir_label = NULL;
 		if (smack_getlabel(dir_path, &dir_label,
@@ -450,7 +450,7 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 			if (str != NULL) {
 				str++;
 				content_name = dp_strdup(str);
-				TRACE_SECURE_INFO("[PARSE][%d] content_name [%s]",
+				TRACE_SECURE_DEBUG("[PARSE][%d] content_name [%s]",
 					request_id, content_name);
 			}
 
@@ -580,7 +580,6 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 
 static void __paused_cb(user_paused_info_t *info, void *user_data)
 {
-	TRACE_INFO("");
 	dp_request_slots *request_slot = (dp_request_slots *) user_data;
 	if (request_slot == NULL) {
 		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
@@ -777,7 +776,6 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 	extension_data_t ext_data = {0,};
 	char *etag = NULL;
 
-	TRACE_INFO("");
 	if (request_slot == NULL) {
 		TRACE_ERROR("[NULL-CHECK] download_clientinfo_slot");
 		return DP_ERROR_INVALID_PARAMETER;
@@ -878,7 +876,7 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 			request->id, da_ret);
 		return __change_error(da_ret);
 	}
-	TRACE_INFO("[SUCCESS][%d] agent_id [%d]", request->id, req_dl_id);
+	TRACE_DEBUG("[SUCCESS][%d] agent_id [%d]", request->id, req_dl_id);
 	request->agent_id = req_dl_id;
 	return DP_ERROR_NONE;
 }

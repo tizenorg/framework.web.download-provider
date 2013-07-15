@@ -69,32 +69,35 @@
 #undef LOG_TAG
 #endif
 #define LOG_TAG "DOWNLOAD_PROVIDER_INTERFACE"
-#define TRACE_ERROR(format, ARG...)  \
-{ \
-LOGE(format, ##ARG); \
-}
-#define TRACE_STRERROR(format, ARG...)  \
-{ \
-LOGE(format" [%s]", ##ARG, strerror(errno)); \
-}
-#define TRACE_INFO(format, ARG...)  \
-{ \
-LOGI(format, ##ARG); \
-}
-#define TRACE_SECURE_INFO(format, ARG...)  \
-{ \
-LOGI(format, ##ARG); \
-}
-#define TRACE_SECURE_ERROR(format, ARG...)  \
-{ \
-LOGE(format, ##ARG); \
-}
+#define TRACE_DEBUG(format, ARG...) LOGD(format, ##ARG)
+#define TRACE_ERROR(format, ARG...) LOGE(format, ##ARG)
+#define TRACE_STRERROR(format, ARG...) LOGE(format" [%s]", ##ARG, strerror(errno))
+#define TRACE_INFO(format, ARG...) LOGI(format, ##ARG)
+
+#ifdef SECURE_LOGD
+#define TRACE_SECURE_DEBUG(format, ARG...) SECURE_LOGD(format, ##ARG)
 #else
-#define TRACE_ERROR(format, ARG...) ;
-#define TRACE_STRERROR(format, ARG...) ;
-#define TRACE_INFO(format, ARG...) ;
-#define TRACE_SECURE_INFO(format, ARG...) ;
-#define TRACE_SECURE_ERROR(format, ARG...) ;
+#define TRACE_SECURE_DEBUG(...) do { } while(0)
+#endif
+#ifdef SECURE_LOGI
+#define TRACE_SECURE_INFO(format, ARG...) SECURE_LOGI(format, ##ARG)
+#else
+#define TRACE_SECURE_INFO(...) do { } while(0)
+#endif
+#ifdef SECURE_LOGE
+#define TRACE_SECURE_ERROR(format, ARG...) SECURE_LOGE(format, ##ARG)
+#else
+#define TRACE_SECURE_ERROR(...) do { } while(0)
+#endif
+
+#else
+#define TRACE_DEBUG(...) do { } while(0)
+#define TRACE_ERROR(...) do { } while(0)
+#define TRACE_STRERROR(...) do { } while(0)
+#define TRACE_INFO(...) do { } while(0)
+#define TRACE_SECURE_DEBUG(...) do { } while(0)
+#define TRACE_SECURE_INFO(...) do { } while(0)
+#define TRACE_SECURE_ERROR(...) do { } while(0)
 #endif
 
 // define type
@@ -162,31 +165,31 @@ static int __dp_interface_convert_state(int state)
 {
 	switch (state) {
 	case DP_STATE_READY:
-		TRACE_INFO("READY");
+		TRACE_DEBUG("READY");
 		return DOWNLOAD_ADPATOR_STATE_READY;
 	case DP_STATE_CONNECTING:
-		TRACE_INFO("CONNECTING/QUEUED");
+		TRACE_DEBUG("CONNECTING/QUEUED");
 		return DOWNLOAD_ADPATOR_STATE_QUEUED;
 	case DP_STATE_QUEUED:
-		TRACE_INFO("QUEUED");
+		TRACE_DEBUG("QUEUED");
 		return DOWNLOAD_ADPATOR_STATE_QUEUED;
 	case DP_STATE_DOWNLOADING:
-		TRACE_INFO("DOWNLOADING");
+		TRACE_DEBUG("DOWNLOADING");
 		return DOWNLOAD_ADPATOR_STATE_DOWNLOADING;
 	case DP_STATE_PAUSE_REQUESTED:
-		TRACE_INFO("PAUSE_REQUESTED/DOWNLOADING");
+		TRACE_DEBUG("PAUSE_REQUESTED/DOWNLOADING");
 		return DOWNLOAD_ADPATOR_STATE_DOWNLOADING;
 	case DP_STATE_PAUSED:
-		TRACE_INFO("PAUSED");
+		TRACE_DEBUG("PAUSED");
 		return DOWNLOAD_ADPATOR_STATE_PAUSED;
 	case DP_STATE_COMPLETED:
-		TRACE_INFO("COMPLETED");
+		TRACE_DEBUG("COMPLETED");
 		return DOWNLOAD_ADPATOR_STATE_COMPLETED;
 	case DP_STATE_CANCELED:
-		TRACE_INFO("CANCELED");
+		TRACE_DEBUG("CANCELED");
 		return DOWNLOAD_ADPATOR_STATE_CANCELED;
 	case DP_STATE_FAILED:
-		TRACE_INFO("FAILED");
+		TRACE_DEBUG("FAILED");
 		return DOWNLOAD_ADPATOR_STATE_FAILED;
 	default:
 		break;
@@ -200,70 +203,70 @@ static int __dp_interface_convert_errorcode(int errorcode)
 	case DP_ERROR_NONE:
 		return DOWNLOAD_ADAPTOR_ERROR_NONE;
 	case DP_ERROR_INVALID_PARAMETER:
-		TRACE_INFO("ERROR_INVALID_PARAMETER");
+		TRACE_DEBUG("ERROR_INVALID_PARAMETER");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	case DP_ERROR_OUT_OF_MEMORY:
-		TRACE_INFO("ERROR_OUT_OF_MEMORY");
+		TRACE_DEBUG("ERROR_OUT_OF_MEMORY");
 		return DOWNLOAD_ADAPTOR_ERROR_OUT_OF_MEMORY;
 	case DP_ERROR_IO_EAGAIN:
-		TRACE_INFO("ERROR_IO_ERROR(EAGAIN)");
+		TRACE_DEBUG("ERROR_IO_ERROR(EAGAIN)");
 		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
 	case DP_ERROR_IO_EINTR:
-		TRACE_INFO("ERROR_IO_ERROR(EINTR)");
+		TRACE_DEBUG("ERROR_IO_ERROR(EINTR)");
 		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
 	case DP_ERROR_IO_ERROR:
-		TRACE_INFO("ERROR_IO_ERROR");
+		TRACE_DEBUG("ERROR_IO_ERROR");
 		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
 	case DP_ERROR_NETWORK_UNREACHABLE:
-		TRACE_INFO("ERROR_NETWORK_UNREACHABLE");
+		TRACE_DEBUG("ERROR_NETWORK_UNREACHABLE");
 		return DOWNLOAD_ADAPTOR_ERROR_NETWORK_UNREACHABLE;
 	case DP_ERROR_NO_SPACE:
-		TRACE_INFO("ERROR_NO_SPACE");
+		TRACE_DEBUG("ERROR_NO_SPACE");
 		return DOWNLOAD_ADAPTOR_ERROR_NO_SPACE;
 	case DP_ERROR_FIELD_NOT_FOUND:
-		TRACE_INFO("ERROR_FIELD_NOT_FOUND");
+		TRACE_DEBUG("ERROR_FIELD_NOT_FOUND");
 		return DOWNLOAD_ADAPTOR_ERROR_FIELD_NOT_FOUND;
 	case DP_ERROR_INVALID_STATE:
-		TRACE_INFO("ERROR_INVALID_STATE");
+		TRACE_DEBUG("ERROR_INVALID_STATE");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_STATE;
 	case DP_ERROR_CONNECTION_FAILED:
-		TRACE_INFO("ERROR_CONNECTION_TIMED_OUT/CONNECTION_FAILED");
+		TRACE_DEBUG("ERROR_CONNECTION_TIMED_OUT/CONNECTION_FAILED");
 		return DOWNLOAD_ADAPTOR_ERROR_CONNECTION_TIMED_OUT;
 	case DP_ERROR_INVALID_URL:
-		TRACE_INFO("ERROR_INVALID_URL");
+		TRACE_DEBUG("ERROR_INVALID_URL");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_URL;
 	case DP_ERROR_INVALID_DESTINATION:
-		TRACE_INFO("ERROR_INVALID_DESTINATION");
+		TRACE_DEBUG("ERROR_INVALID_DESTINATION");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_DESTINATION;
 	case DP_ERROR_PERMISSION_DENIED:
-		TRACE_INFO("ERROR_PERMISSION_DENIED");
+		TRACE_DEBUG("ERROR_PERMISSION_DENIED");
 		return DOWNLOAD_ADAPTOR_ERROR_PERMISSION_DENIED;
 	case DP_ERROR_QUEUE_FULL:
-		TRACE_INFO("ERROR_QUEUE_FULL");
+		TRACE_DEBUG("ERROR_QUEUE_FULL");
 		return DOWNLOAD_ADAPTOR_ERROR_QUEUE_FULL;
 	case DP_ERROR_ALREADY_COMPLETED:
-		TRACE_INFO("ERROR_ALREADY_COMPLETED");
+		TRACE_DEBUG("ERROR_ALREADY_COMPLETED");
 		return DOWNLOAD_ADAPTOR_ERROR_ALREADY_COMPLETED;
 	case DP_ERROR_FILE_ALREADY_EXISTS:
-		TRACE_INFO("ERROR_FILE_ALREADY_EXISTS");
+		TRACE_DEBUG("ERROR_FILE_ALREADY_EXISTS");
 		return DOWNLOAD_ADAPTOR_ERROR_FILE_ALREADY_EXISTS;
 	case DP_ERROR_TOO_MANY_DOWNLOADS:
-		TRACE_INFO("ERROR_TOO_MANY_DOWNLOADS");
+		TRACE_DEBUG("ERROR_TOO_MANY_DOWNLOADS");
 		return DOWNLOAD_ADAPTOR_ERROR_TOO_MANY_DOWNLOADS;
 	case DP_ERROR_NO_DATA:
-		TRACE_INFO("ERROR_NO_DATA");
+		TRACE_DEBUG("ERROR_NO_DATA");
 		return DOWNLOAD_ADAPTOR_ERROR_NO_DATA;
 	case DP_ERROR_UNHANDLED_HTTP_CODE:
-		TRACE_INFO("ERROR_UNHANDLED_HTTP_CODE");
+		TRACE_DEBUG("ERROR_UNHANDLED_HTTP_CODE");
 		return DOWNLOAD_ADAPTOR_ERROR_UNHANDLED_HTTP_CODE;
 	case DP_ERROR_CANNOT_RESUME:
-		TRACE_INFO("ERROR_CANNOT_RESUME");
+		TRACE_DEBUG("ERROR_CANNOT_RESUME");
 		return DOWNLOAD_ADAPTOR_ERROR_CANNOT_RESUME;
 	case DP_ERROR_ID_NOT_FOUND:
-		TRACE_INFO("ERROR_ID_NOT_FOUND");
+		TRACE_DEBUG("ERROR_ID_NOT_FOUND");
 		return DOWNLOAD_ADAPTOR_ERROR_ID_NOT_FOUND;
 	case DP_ERROR_UNKNOWN:
-		TRACE_INFO("ERROR_INVALID_STATE/UNKNOWN");
+		TRACE_DEBUG("ERROR_INVALID_STATE/UNKNOWN");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_STATE;
 	default:
 		break;
@@ -643,6 +646,7 @@ static int __create_socket()
 		close(sockfd);
 		return -1;
 	}
+	TRACE_DEBUG("sockfd [%d]", sockfd);
 	return sockfd;
 }
 
@@ -677,7 +681,7 @@ static void __clear_read_buffer(int fd)
 	// FIONREAD : Returns the number of bytes immediately readable
 	if (ioctl(fd, FIONREAD, &unread_count) >= 0) {
 		if (unread_count > 0) {
-			TRACE_INFO("[CLEAN] garbage packet[%ld]", unread_count);
+			TRACE_DEBUG("[CLEAN] garbage packet[%ld]", unread_count);
 			for ( i = 0; i < unread_count; i++) {
 				if (read(fd, &tmp_char, sizeof(char)) < 0) {
 					TRACE_STRERROR("[CHECK] read");
@@ -816,9 +820,9 @@ static void *__dp_interface_event_manager(void *arg)
 
 	FD_CLR(g_interface_info->event_socket, &read_fdset);
 
-	TRACE_INFO("Terminate Event Thread");
+	TRACE_DEBUG("Terminate Event Thread");
 	pthread_mutex_lock(&g_function_mutex);
-	TRACE_INFO("Disconnect All Connection");
+	TRACE_DEBUG("Disconnect All Connection");
 	g_interface_event_thread_id = 0; // set 0 to not call pthread_cancel
 	__disconnect_from_provider();
 	pthread_mutex_unlock(&g_function_mutex);
@@ -827,8 +831,6 @@ static void *__dp_interface_event_manager(void *arg)
 
 static int __connect_to_provider()
 {
-	TRACE_INFO("");
-
 	if (g_interface_info == NULL) {
 
 		g_interface_info =
@@ -1194,6 +1196,7 @@ static dp_error_type __dp_interface_get_int
 		recv_int = __ipc_read_int(fd);
 		if (recv_int >= 0) {
 			*value = recv_int;
+			TRACE_DEBUG("ID : %d recv_int : %d", id, *value);
 		} else {
 			errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
 		}

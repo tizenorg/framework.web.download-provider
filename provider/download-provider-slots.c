@@ -30,7 +30,6 @@
 
 dp_group_slots *dp_client_group_slots_new(int size)
 {
-	TRACE_INFO("");
 	dp_group_slots *slots = NULL;
 	if (size <= 0)
 		return NULL;
@@ -41,7 +40,6 @@ dp_group_slots *dp_client_group_slots_new(int size)
 
 dp_request_slots *dp_request_slots_new(int size)
 {
-	TRACE_INFO("");
 	int i = 0;
 	dp_request_slots *slots = NULL;
 	if (size <= 0)
@@ -55,7 +53,6 @@ dp_request_slots *dp_request_slots_new(int size)
 
 void dp_request_init(dp_request *request)
 {
-	TRACE_INFO("");
 	if (request == NULL)
 		return ;
 
@@ -93,8 +90,6 @@ dp_request *dp_request_new()
 
 int dp_request_slot_free(dp_request_slots *request_slot)
 {
-	TRACE_INFO("");
-
 	if (request_slot == NULL)
 		return -1;
 	CLIENT_MUTEX_LOCK(&request_slot->mutex);
@@ -116,7 +111,6 @@ int dp_request_free(dp_request *request)
 
 int dp_client_group_free(dp_client_group *group)
 {
-	TRACE_INFO("");
 	if (group != NULL) {
 		if (group->cmd_socket > 0)
 			dp_socket_free(group->cmd_socket);
@@ -134,7 +128,6 @@ int dp_client_group_free(dp_client_group *group)
 
 int dp_client_group_slots_free(dp_group_slots *slots, int size)
 {
-	TRACE_INFO("");
 	int i = 0;
 	if (slots) {
 		for (; i < size; i++) {
@@ -150,7 +143,6 @@ int dp_client_group_slots_free(dp_group_slots *slots, int size)
 
 int dp_request_slots_free(dp_request_slots *slots, int size)
 {
-	TRACE_INFO("");
 	int i = 0;
 	if (slots != NULL) {
 		for (; i < size; i++) {
