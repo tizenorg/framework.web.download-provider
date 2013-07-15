@@ -361,12 +361,13 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 							request_id, dir_path);
 					if (ret == 0) {
 						free(dir_label);
+						dir_label = NULL;
 						ret = smack_getlabel(dir_path, &dir_label,
 								SMACK_LABEL_ACCESS);
-						if (ret == 0 && smack_label != NULL) {
-							ret = smack_have_access(
-									smack_label,
-									dir_label, "t");
+						if (ret == 0 && smack_label != NULL &&
+								dir_label != NULL) {
+							ret = smack_have_access(smack_label,
+								dir_label, "t");
 							if (ret > 0) {
 								smack_label = dir_label;
 							} else {
