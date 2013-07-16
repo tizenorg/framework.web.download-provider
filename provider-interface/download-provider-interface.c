@@ -392,6 +392,27 @@ static int __ipc_read_int(int fd)
 	return value;
 }
 
+static int __ipc_read_download_id(int fd)
+{
+	int value = -1;
+	int read_len = 0;
+	int try_count = 5;
+
+	if (fd < 0) {
+		TRACE_ERROR("[CHECK SOCKET]");
+		return -1;
+	}
+	do {
+		read_len = read(fd, &value, sizeof(int));
+		if (read_len < 0) {
+			TRACE_STRERROR("[CRITICAL] read");
+			return -1;
+		}
+		try_count--;
+	} while (read_len == 0 && value == 0 && try_count > 0);
+	return value;
+}
+
 // keep the order/ unsigned , str
 static char *__ipc_read_string(int fd)
 {
@@ -1208,8 +1229,8 @@ int dp_interface_create(int *id)
 	errorcode = __ipc_send_command_return(-1, DP_CMD_CREATE);
 	if (errorcode == DP_ERROR_NONE) {
 		// getting state with ID from provider.
-		t_id = __ipc_read_int(g_interface_info->cmd_socket);
-		if (t_id >= 0) {
+		t_id = __ipc_read_download_id(g_interface_info->cmd_socket);
+		if (t_id > 0) {
 			*id = t_id;
 			g_interface_slots[index].id = t_id;
 			g_interface_slots[index].callback.state = NULL;

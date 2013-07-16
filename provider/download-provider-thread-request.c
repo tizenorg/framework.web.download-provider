@@ -1624,6 +1624,7 @@ void *dp_thread_requests_manager(void *arg)
 					if (dp_ipc_send_errorcode(sock,
 							DP_ERROR_NONE) < 0) {
 						// disconnect this group, bad client
+						TRACE_ERROR("[ECHO] IO ERROR CLEAN sock:%d", sock);
 						FD_CLR(sock, &listen_fdset);
 						__clear_group(privates, group);
 						privates->groups[i].group = NULL;

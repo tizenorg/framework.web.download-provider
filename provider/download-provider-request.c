@@ -193,9 +193,15 @@ dp_error_type dp_request_create(int id, dp_client_group *group, dp_request **emp
 		return DP_ERROR_OUT_OF_MEMORY;
 	}
 
-	new_request->id = __get_download_request_id();
+	int check_id = -1;
+	do {
+		new_request->id = __get_download_request_id();
+		check_id = dp_db_get_int_column(new_request->id,
+							DP_DB_TABLE_LOG, DP_DB_COL_ID);
+	} while (check_id == new_request->id); // means duplicated id
+
 	new_request->group = group;
-	if (group->pkgname && strlen(group->pkgname) > 1)
+	if (group->pkgname != NULL && strlen(group->pkgname) > 1)
 		new_request->packagename = dp_strdup(group->pkgname);
 	new_request->credential = group->credential;
 	if (new_request->packagename == NULL) {
