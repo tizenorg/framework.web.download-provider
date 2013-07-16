@@ -532,7 +532,7 @@ char *get_full_path_avoided_duplication(char *in_dir, char *in_candidate_file_na
 	int extension_len = 0;
 
 	int suffix_count = 0;	/* means suffix on file name. up to "_99" */
-	const int max_suffix_count = 99;
+	const int max_suffix_count = 1000000000;
 	int suffix_len = (int)log10(max_suffix_count+1) + 1;	/* 1 means "_" */
 
 	if (!in_dir || !in_candidate_file_name)
