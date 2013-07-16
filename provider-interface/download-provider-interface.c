@@ -936,7 +936,7 @@ static dp_error_type __dp_interface_set_string
 	int fd = g_interface_info->cmd_socket;
 
 	// send commnad with ID
-	errorcode = __ipc_send_command(fd, id, cmd);
+	errorcode = __ipc_send_command_return(id, cmd);
 	if (errorcode == DP_ERROR_NONE) {
 		// send string
 		errorcode = __ipc_send_string(fd, value);
@@ -975,7 +975,7 @@ static dp_error_type __dp_interface_set_strings
 	int fd = g_interface_info->cmd_socket;
 
 	// send commnad with ID
-	errorcode = __ipc_send_command(fd, id, cmd);
+	errorcode = __ipc_send_command_return(id, cmd);
 	if (errorcode == DP_ERROR_NONE) {
 		if (__ipc_send_int(fd, (int)count) == 0) {
 			int i = 0;
@@ -1065,7 +1065,7 @@ static dp_error_type __dp_interface_get_strings
 
 	int fd = g_interface_info->cmd_socket;
 
-	errorcode = __ipc_send_command(fd, id, cmd);
+	errorcode = __ipc_send_command_return(id, cmd);
 	if (errorcode == DP_ERROR_NONE) {
 		if (length > 0 && strings != NULL) {
 			if (__ipc_send_int(fd, (int)length) == 0) {
@@ -1180,7 +1180,7 @@ static dp_error_type __dp_interface_set_int
 	int fd = g_interface_info->cmd_socket;
 
 	// send commnad with ID
-	errorcode = __ipc_send_command(fd, id, cmd);
+	errorcode = __ipc_send_command_return(id, cmd);
 	if (errorcode == DP_ERROR_NONE) {
 		// send string
 		if (__ipc_send_int(fd, value) == 0) {
@@ -1574,9 +1574,8 @@ int dp_interface_add_http_header_field(const int id, const char *field,
 	DP_CHECK_PROVIDER_STATUS;
 
 	// send commnad with ID
-	if (__ipc_send_command
-		(g_interface_info->cmd_socket, id, DP_CMD_SET_HTTP_HEADER)
-		!= DP_ERROR_NONE) {
+	if (__ipc_send_command_return(id, DP_CMD_SET_HTTP_HEADER) !=
+			DP_ERROR_NONE) {
 		pthread_mutex_unlock(&g_interface_info->mutex);
 		__disconnect_from_provider();
 		pthread_mutex_unlock(&g_function_mutex);
@@ -1630,9 +1629,8 @@ int dp_interface_get_http_header_field(const int id, const char *field,
 
 	DP_CHECK_PROVIDER_STATUS;
 
-	if (__ipc_send_command
-		(g_interface_info->cmd_socket, id, DP_CMD_GET_HTTP_HEADER)
-		!= DP_ERROR_NONE) {
+	if (__ipc_send_command_return(id, DP_CMD_GET_HTTP_HEADER) != 
+			DP_ERROR_NONE) {
 		pthread_mutex_unlock(&g_interface_info->mutex);
 		__disconnect_from_provider();
 		pthread_mutex_unlock(&g_function_mutex);
@@ -1694,9 +1692,8 @@ int dp_interface_remove_http_header_field(const int id,
 	DP_CHECK_PROVIDER_STATUS;
 
 	// send commnad with ID
-	if (__ipc_send_command
-		(g_interface_info->cmd_socket, id, DP_CMD_DEL_HTTP_HEADER)
-		!= DP_ERROR_NONE) {
+	if (__ipc_send_command_return(id, DP_CMD_DEL_HTTP_HEADER) !=
+			DP_ERROR_NONE) {
 		pthread_mutex_unlock(&g_interface_info->mutex);
 		__disconnect_from_provider();
 		pthread_mutex_unlock(&g_function_mutex);

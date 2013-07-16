@@ -955,6 +955,7 @@ static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *
 		return errorcode;
 	}
 
+	dp_ipc_send_errorcode(sock, DP_ERROR_NONE);
 	// complex read() and write().
 	char *read_str2 = NULL;
 	errorcode = DP_ERROR_NONE;
@@ -1046,7 +1047,7 @@ static dp_error_type __dp_do_set_command(int sock, dp_command* cmd, dp_request *
 	dp_error_type errorcode = DP_ERROR_NONE;
 	char *read_str = NULL;
 
-
+	dp_ipc_send_errorcode(sock, DP_ERROR_NONE);
 	// read a interger or a string, return errorcode.
 	errorcode = DP_ERROR_NONE;
 	switch(cmd->cmd) {
