@@ -36,7 +36,7 @@ static da_result_t __download_content(stage_info *stage);
 
 da_result_t start_download(const char *url , int *dl_id)
 {
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGD(Default);
 	return start_download_with_extension(url, dl_id, NULL);
 }
 
@@ -60,7 +60,7 @@ da_result_t start_download_with_extension(
 	download_thread_input *thread_info = DA_NULL;
 	pthread_attr_t thread_attr;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (extension_data) {
 		request_header = extension_data->request_header;
@@ -207,7 +207,7 @@ da_result_t __make_source_info_basic_download(
 	source_info_t *source_info = DA_NULL;
 	source_info_basic_t *source_info_basic = DA_NULL;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (!stage) {
 		DA_LOG_ERR(Default, "no stage; DA_ERR_INVALID_ARGUMENT");
@@ -246,8 +246,8 @@ da_result_t __make_source_info_basic_download(
 
 	source_info->source_info_type.source_info_basic = source_info_basic;
 
-	DA_SECURE_LOGI("BASIC HTTP STARTED: URL=%s",
-			source_info->source_info_type.source_info_basic->url);
+//	DA_SECURE_LOGI("BASIC HTTP STARTED: URL=%s",
+//			source_info->source_info_type.source_info_basic->url);
 ERR:
 	return ret;
 }
@@ -267,7 +267,7 @@ static void *__thread_start_download(void *data)
 
 	int slot_id = DA_INVALID_ID;
 
-	DA_LOG_FUNC_START(Thread);
+	DA_LOG_FUNC_LOGV(Thread);
 
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, DA_NULL);
 
@@ -394,7 +394,7 @@ da_result_t __download_content(stage_info *stage)
 	da_bool_t isDownloadComplete = DA_FALSE;
 	int slot_id = DA_INVALID_ID;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	slot_id = GET_STAGE_DL_ID(stage);
 	CHANGE_DOWNLOAD_STATE(DOWNLOAD_STATE_NEW_DOWNLOAD, stage);
@@ -403,7 +403,7 @@ da_result_t __download_content(stage_info *stage)
 		stage = GET_DL_CURRENT_STAGE(slot_id);
 		_da_thread_mutex_lock (&mutex_download_state[GET_STAGE_DL_ID(stage)]);
 		download_state = GET_DL_STATE_ON_STAGE(stage);
-		DA_LOG(Default, "download_state to - [%d] ", download_state);
+		DA_LOG_VERBOSE(Default, "download_state to - [%d] ", download_state);
 		_da_thread_mutex_unlock (&mutex_download_state[GET_STAGE_DL_ID(stage)]);
 
 		switch(download_state) {

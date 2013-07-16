@@ -57,7 +57,7 @@ da_result_t get_user_agent_string(char **uagent_str)
 	char *key = DA_NULL;
 #endif
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (!uagent_str) {
 		DA_LOG_ERR(Default,"Invalid Argument");
@@ -90,7 +90,7 @@ char *get_proxy_address(void)
 	connection_h handle = NULL;
     connection_address_family_e family = CONNECTION_ADDRESS_FAMILY_IPV4;
 
-    DA_LOG_FUNC_START(Default);
+    DA_LOG_FUNC_LOGV(Default);
     if (connection_create(&handle) < 0) {
 		DA_LOG_ERR(Default,"Fail to create connection handle");
 		return NULL;

@@ -57,7 +57,7 @@ da_result_t http_msg_request_create(http_msg_request_t **http_msg_request)
 {
 	http_msg_request_t *temp_http_msg_request = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	temp_http_msg_request = (http_msg_request_t *)calloc(1,
 		sizeof(http_msg_request_t));
@@ -82,7 +82,7 @@ void http_msg_request_destroy(http_msg_request_t **http_msg_request)
 {
 	http_msg_request_t *temp_http_msg_request = *http_msg_request;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (temp_http_msg_request) {
 		if (temp_http_msg_request->http_method) {
@@ -111,7 +111,7 @@ void http_msg_request_destroy(http_msg_request_t **http_msg_request)
 da_result_t http_msg_request_set_method(http_msg_request_t *http_msg_request,
 	const char *method)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (!http_msg_request || !method) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -130,7 +130,7 @@ da_result_t http_msg_request_set_method(http_msg_request_t *http_msg_request,
 da_result_t http_msg_request_get_method(http_msg_request_t *http_msg_request,
 	const char **method)
 {
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_request) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -149,7 +149,7 @@ da_result_t http_msg_request_get_method(http_msg_request_t *http_msg_request,
 da_result_t http_msg_request_set_url(http_msg_request_t *http_msg_request,
 	const char *url)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (!http_msg_request) {
 		DA_LOG_ERR(HTTPManager, "http_msg_request is NULL; DA_ERR_INVALID_ARGUMENT");
@@ -163,7 +163,7 @@ da_result_t http_msg_request_set_url(http_msg_request_t *http_msg_request,
 
 	http_msg_request->url = strdup(url);
 
-	DA_SECURE_LOGD("http url : %s", http_msg_request->url);
+	//DA_SECURE_LOGD("http url : %s", http_msg_request->url);
 
 	return DA_RESULT_OK;
 }
@@ -171,7 +171,7 @@ da_result_t http_msg_request_set_url(http_msg_request_t *http_msg_request,
 da_result_t http_msg_request_get_url(http_msg_request_t *http_msg_request,
 	const char **url)
 {
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_request) {
 		DA_LOG_ERR(HTTPManager, "http_msg_request is NULL; DA_ERR_INVALID_ARGUMENT");
@@ -190,7 +190,7 @@ da_result_t http_msg_request_get_url(http_msg_request_t *http_msg_request,
 da_result_t http_msg_request_set_body(http_msg_request_t *http_msg_request,
 	const char *body)
 {
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_request) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -210,7 +210,7 @@ da_result_t http_msg_request_set_body(http_msg_request_t *http_msg_request,
 da_result_t http_msg_request_get_body(http_msg_request_t *http_msg_request,
 	const char **body)
 {
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_request) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -230,7 +230,7 @@ da_result_t http_msg_request_get_body(http_msg_request_t *http_msg_request,
 da_result_t http_msg_request_add_field(http_msg_request_t *http_msg_request,
 	const char *field, const char *value)
 {
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_request) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -244,7 +244,7 @@ da_result_t http_msg_response_create(http_msg_response_t **http_msg_response)
 {
 	http_msg_response_t *temp_http_msg_response = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	temp_http_msg_response = (http_msg_response_t *)calloc(1,
 		sizeof(http_msg_response_t));
@@ -265,7 +265,7 @@ void http_msg_response_destroy(http_msg_response_t **http_msg_response)
 {
 	http_msg_response_t *temp_http_msg_response = *http_msg_response;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 	if (temp_http_msg_response) {
 		__http_header_destroy_all_field(&(temp_http_msg_response->head));
 
@@ -277,7 +277,7 @@ void http_msg_response_destroy(http_msg_response_t **http_msg_response)
 da_result_t http_msg_response_set_status_code(
 	http_msg_response_t *http_msg_response, int status_code)
 {
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_response) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -292,7 +292,7 @@ da_result_t http_msg_response_set_status_code(
 da_result_t http_msg_response_get_status_code(
 	http_msg_response_t *http_msg_response, int *status_code)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (!http_msg_response) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -307,7 +307,7 @@ da_result_t http_msg_response_get_status_code(
 da_result_t http_msg_response_add_field(http_msg_response_t *http_msg_response,
 	const char *field, const char *value)
 {
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_response) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -323,8 +323,7 @@ da_result_t __http_header_add_field(http_header_t **head,
 	http_header_t *pre = NULL;
 	http_header_t *cur = NULL;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
-	DA_SECURE_LOGD("[%s][%s]", field, value);
+	//DA_SECURE_LOGD("[%s][%s]", field, value);
 
 	pre = cur = *head;
 	while (cur) {
@@ -378,7 +377,7 @@ void __http_header_destroy_all_field(http_header_t **head)
 	http_header_t *pre = NULL;
 	http_header_t *cur = NULL;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	cur = *head;
 
@@ -434,7 +433,7 @@ void __http_header_destroy_all_option(http_header_options_t **head)
 	http_header_options_t *pre = NULL;
 	http_header_options_t *cur = NULL;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	cur = *head;
 
@@ -462,7 +461,7 @@ void __http_header_destroy_all_option(http_header_options_t **head)
 da_result_t http_msg_request_get_iter(http_msg_request_t *http_msg_request,
 	http_msg_iter_t *http_msg_iter)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (!http_msg_request) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -477,15 +476,13 @@ da_result_t http_msg_request_get_iter(http_msg_request_t *http_msg_request,
 da_result_t http_msg_response_get_iter(http_msg_response_t *http_msg_response,
 	http_msg_iter_t *http_msg_iter)
 {
-	//	DA_LOG_FUNC_START(HTTPManager);
-
 	if (!http_msg_response) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
 		return DA_ERR_INVALID_ARGUMENT;
 	}
 
 	*http_msg_iter = http_msg_response->head;
-	//	DA_LOG(HTTPManager, "retrieve iter = 0x%x", (unsigned int)http_msg_iter);
+	//	DA_LOG_VERBOSE(HTTPManager, "retrieve iter = 0x%x", (unsigned int)http_msg_iter);
 
 	return DA_RESULT_OK;
 }
@@ -495,9 +492,7 @@ da_bool_t http_msg_get_field_with_iter(http_msg_iter_t *http_msg_iter,
 {
 	http_header_t *cur = *http_msg_iter;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
-
-	//	DA_LOG(HTTPManager, "getting iter = 0x%x", (unsigned int)cur);
+	//	DA_LOG_VERBOSE(HTTPManager, "getting iter = 0x%x", (unsigned int)cur);
 
 	if (cur) {
 		*out_field = cur->field;
@@ -506,7 +501,7 @@ da_bool_t http_msg_get_field_with_iter(http_msg_iter_t *http_msg_iter,
 
 		return DA_TRUE;
 	} else {
-		//		DA_LOG(HTTPManager, "end of iter");
+		//	DA_LOG_VERBOSE(HTTPManager, "end of iter");
 		return DA_FALSE;
 	}
 }
@@ -516,9 +511,7 @@ da_bool_t http_msg_get_header_with_iter(http_msg_iter_t *http_msg_iter,
 {
 	http_header_t *cur = *http_msg_iter;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
-
-	//	DA_LOG(HTTPManager, "getting iter = 0x%x", (unsigned int)cur);
+	//	DA_LOG_VERBOSE(HTTPManager, "getting iter = 0x%x", (unsigned int)cur);
 
 	if (cur) {
 		*out_field = cur->field;
@@ -527,7 +520,7 @@ da_bool_t http_msg_get_header_with_iter(http_msg_iter_t *http_msg_iter,
 
 		return DA_TRUE;
 	} else {
-		//		DA_LOG(HTTPManager, "end of iter");
+		//	DA_LOG_VERBOSE(HTTPManager, "end of iter");
 		return DA_FALSE;
 	}
 }
@@ -552,7 +545,7 @@ http_header_options_t *__parsing_N_create_option_str(char *org_str)
 	int i = 0;
 	http_header_options_t *option = NULL;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!org_str)
 		return NULL;
@@ -618,8 +611,8 @@ http_header_options_t *__parsing_N_create_option_str(char *org_str)
 		working_pos = working_str = NULL;
 	}
 
-	DA_SECURE_LOGD("option_field = [%s], option_value = [%s]",
-		option_field, option_value);
+//	DA_SECURE_LOGD("option_field = [%s], option_value = [%s]",
+//		option_field, option_value);
 
 	if (option_field || option_value) {
 		option = __create_http_header_option(
@@ -650,7 +643,7 @@ http_header_options_t *__parsing_options(char *org_str)
 	char *wanted_str_end = NULL;
 	char *cur_pos = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!org_str)
 		return NULL;
@@ -710,8 +703,6 @@ void __parsing_raw_value(http_header_t *http_header_field)
 	char *trimed_value_start = NULL;
 	char *trimed_value_end = NULL;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
-
 	raw_value = http_header_field->raw_value;
 	//	DA_SECURE_LOGD("raw_value = [%s]", raw_value);
 
@@ -750,7 +741,7 @@ void __parsing_raw_value(http_header_t *http_header_field)
 
 	cur = http_header_field->options;
 	while (cur) {
-		DA_SECURE_LOGD("field = [%s], value = [%s]", cur->field, cur->value);
+//		DA_SECURE_LOGD("field = [%s], value = [%s]", cur->field, cur->value);
 		cur = cur->next;
 	}
 
@@ -762,7 +753,7 @@ da_bool_t __get_http_header_option_for_field(
 {
 	http_header_options_t *cur = NULL;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!header_option) {
 		DA_LOG_ERR(HTTPManager, "input header_option is NULL.");
@@ -793,12 +784,12 @@ da_bool_t __get_http_header_for_field(http_msg_response_t *http_msg_response,
 	http_header_t *header = NULL;
 	char *field = NULL;
 
-	//DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	http_msg_response_get_iter(http_msg_response, &http_msg_iter);
 	while (http_msg_get_header_with_iter(&http_msg_iter, &field, &header)) {
 		if (field && header && !strncasecmp(field, in_field, strlen(field))) {
-			DA_SECURE_LOGD("[%s][%s]", field, header->value);
+//			DA_SECURE_LOGD("[%s][%s]", field, header->value);
 			*out_header = header;
 			return DA_TRUE;
 		}
@@ -809,7 +800,7 @@ da_bool_t __get_http_header_for_field(http_msg_response_t *http_msg_response,
 
 void __exchange_header_value(http_header_t *header, const char *in_raw_value)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (!header || !in_raw_value)
 		return;
@@ -834,7 +825,7 @@ da_bool_t http_msg_response_get_content_type(
 	da_bool_t b_ret = DA_FALSE;
 	http_header_t *header = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	b_ret = __get_http_header_for_field(http_msg_response, "Content-Type",
 		&header);
@@ -855,7 +846,7 @@ void http_msg_response_set_content_type(http_msg_response_t *http_msg_response,
 	da_bool_t b_ret = DA_FALSE;
 	http_header_t *header = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_response || !in_type)
 		return;
@@ -881,7 +872,7 @@ da_bool_t http_msg_response_get_content_length(
 	da_bool_t b_ret = DA_FALSE;
 	http_header_t *header = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	b_ret = __get_http_header_for_field(http_msg_response,
 		"Content-Length", &header);
@@ -910,7 +901,7 @@ da_bool_t http_msg_response_get_content_disposition(
 	char *decoded_str = NULL;
 	int wanted_str_len = 0;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	b_ret = __get_http_header_for_field(http_msg_response,
 		"Content-Disposition", &header);
@@ -992,7 +983,7 @@ da_bool_t http_msg_response_get_ETag(http_msg_response_t *http_msg_response,
 	da_bool_t b_ret = DA_FALSE;
 	http_header_t *header = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	b_ret = __get_http_header_for_field(http_msg_response, "ETag", &header);
 	if (!b_ret) {
@@ -1012,7 +1003,7 @@ da_bool_t http_msg_response_get_date(http_msg_response_t *http_msg_response,
 	da_bool_t b_ret = DA_FALSE;
 	http_header_t *header = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	b_ret = __get_http_header_for_field(http_msg_response, "Date", &header);
 	if (!b_ret) {
@@ -1032,7 +1023,7 @@ da_bool_t http_msg_response_get_location(http_msg_response_t *http_msg_response,
 	da_bool_t b_ret = DA_FALSE;
 	http_header_t *header = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	b_ret = __get_http_header_for_field(http_msg_response, "Location", &header);
 	if (!b_ret) {
@@ -1055,7 +1046,7 @@ da_result_t http_msg_response_get_boundary(
 	char *value = NULL;
 	char *boundary = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!http_msg_response) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_INVALID_ARGUMENT");
@@ -1132,7 +1123,7 @@ char *get_http_response_header_raw(http_msg_response_t *http_msg_response)
 	int len = 0;
 	char *buff = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	http_msg_response_get_iter(http_msg_response, &http_msg_iter);
 	while (http_msg_get_header_with_iter(&http_msg_iter, &field, &header)) {

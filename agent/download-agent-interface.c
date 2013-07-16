@@ -29,7 +29,7 @@ int da_init(
 {
 	da_result_t ret = DA_RESULT_OK;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGD(Default);
 
 	if (!da_client_callback) {
 		ret = DA_ERR_INVALID_ARGUMENT;
@@ -70,7 +70,7 @@ int da_deinit()
 {
 	da_result_t ret = DA_RESULT_OK;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGD(Default);
 
 	deinit_http_mgr();
 	deinit_download_mgr();
@@ -89,7 +89,7 @@ int da_start_download(
 {
 	da_result_t ret = DA_RESULT_OK;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGD(Default);
 
 	*download_id = DA_INVALID_ID;
 
@@ -117,7 +117,7 @@ int da_start_download_with_extension(
 	int req_header_count = 0;
 	int i = 0;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	*download_id = DA_INVALID_ID;
 
@@ -143,7 +143,7 @@ int da_start_download_with_extension(
 					extension_data->request_header[i]);
 			}
 		}
-		DA_LOG(Default, "actual request_header_count = [%d]", req_header_count);
+		DA_LOG_VERBOSE(Default, "actual request_header_count = [%d]", req_header_count);
 		if (extension_data->request_header_count != req_header_count) {
 			DA_LOG_ERR(Default, "Request header count is not matched with number of request header array");
 			extension_data->request_header = NULL;

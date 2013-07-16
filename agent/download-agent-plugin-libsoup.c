@@ -33,7 +33,7 @@ da_bool_t _pi_http_is_this_session_table_entry_using(
 
 da_result_t PI_http_init(void)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	using_content_sniffing = DA_TRUE;
 
@@ -42,7 +42,7 @@ da_result_t PI_http_init(void)
 
 void PI_http_deinit(void)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	return;
 }
@@ -56,7 +56,7 @@ da_result_t _set_proxy_on_soup_session(SoupSession *session, char *proxy_addr)
 		DA_SECURE_LOGD("received proxy = %s \n", proxy_addr);
 		if (!strstr(proxy_addr, "0.0.0.0")) {
 			if (strstr((const char *)proxy_addr, "http") == DA_NULL) {
-				/* DA_LOG(Default,"There is no \"http://\" on received uri, so, add it."); */
+				DA_LOG_VERBOSE(Default,"There is no \"http://\" on received uri, so, add it.");
 
 				char *tmp_str = DA_NULL;
 				int needed_len = 0;
@@ -83,7 +83,7 @@ da_result_t _set_proxy_on_soup_session(SoupSession *session, char *proxy_addr)
 			}
 		}
 	} else {
-		DA_LOG(HTTPManager,"There is no proxy value");
+		DA_LOG_VERBOSE(HTTPManager,"There is no proxy value");
 	}
 ERR:
 	return ret;
@@ -139,7 +139,7 @@ da_result_t PI_http_start_transaction(const input_for_tranx_t *input_for_tranx,
 	SoupSession *session = DA_NULL;
 	SoupMessage *msg = DA_NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (DA_FALSE == _pi_http_is_valid_input_for_tranx(input_for_tranx)) {
 		DA_LOG_ERR(HTTPManager,"input_for_tranx is invalid");
@@ -156,7 +156,7 @@ da_result_t PI_http_start_transaction(const input_for_tranx_t *input_for_tranx,
 		ret = DA_ERR_ALREADY_MAX_DOWNLOAD;
 		goto ERR;
 	}
-	DA_LOG(HTTPManager,"session_table_entry = %d", session_table_entry);
+	DA_LOG_VERBOSE(HTTPManager,"session_table_entry = %d", session_table_entry);
 
 	if (DA_FALSE == _pi_http_register_queue_to_session_table(
 			session_table_entry, queue)) {
@@ -254,8 +254,6 @@ da_result_t PI_http_disconnect_transaction(int in_tranx_id)
 	da_result_t ret = DA_RESULT_OK;
 	int session_table_entry = -1;
 
-	DA_LOG_FUNC_START(HTTPManager);
-
 	DA_LOG(HTTPManager,"in_tranx_id = %d", in_tranx_id);
 
 	session_table_entry = in_tranx_id;
@@ -272,7 +270,7 @@ da_result_t PI_http_cancel_transaction(int in_tranx_id, da_bool_t abort_option)
 	SoupMessage *msg;
 	int session_table_entry = -1;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	DA_LOG(HTTPManager,"in_tranx_id = %d", in_tranx_id);
 
@@ -309,7 +307,7 @@ void PI_http_pause_transaction(int transaction_id)
 	pthread_mutex_t *mutex;
 	pthread_cond_t *cond;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	DA_LOG(HTTPManager,"in_tranx_id = %d", transaction_id);
 
@@ -341,7 +339,7 @@ void PI_http_unpause_transaction(int transaction_id)
 	pthread_mutex_t *mutex;
 	pthread_cond_t *cond;
 
-	/*	DA_LOG_FUNC_START(Default); */
+	DA_LOG_FUNC_LOGV(Default);
 
 	session_table_entry = transaction_id;
 
@@ -616,8 +614,6 @@ void _pi_http_store_read_header_to_queue(SoupMessage *msg, const char *sniffedTy
 
 	http_msg_response_t *http_msg_response = NULL;
 
-	/*	DA_LOG_FUNC_START(Default); */
-
 	if (msg->response_headers) {
 		ret = http_msg_response_create(&http_msg_response);
 		if (ret != DA_RESULT_OK)
@@ -636,6 +632,7 @@ void _pi_http_store_read_header_to_queue(SoupMessage *msg, const char *sniffedTy
 					!= DA_NULL)) {
 				http_msg_response_add_field(http_msg_response,
 						header_name, header_value);
+				DA_SECURE_LOGD("[%s][%s]", header_name, header_value);
 			}
 		}
 		DA_LOG(HTTPManager,"\n-------------------------------------------------------------\n");
@@ -691,8 +688,6 @@ void _pi_http_store_read_data_to_queue(SoupMessage *msg, const char *body_data,
 	int session_table_entry = -1;
 	int http_status = -1;
 
-	/*	DA_LOG_FUNC_START(Default); */
-
 	http_status = msg->status_code;
 
 	session_table_entry
@@ -704,7 +699,7 @@ void _pi_http_store_read_data_to_queue(SoupMessage *msg, const char *body_data,
 	}
 
 	if (received_body_len == 0) {
-		DA_LOG(HTTPManager,"Q_EVENT_TYPE_DATA_FINAL");
+		DA_LOG_VERBOSE(HTTPManager,"Q_EVENT_TYPE_DATA_FINAL");
 		da_event_type_data = Q_EVENT_TYPE_DATA_FINAL;
 	} else {
 		da_event_type_data = Q_EVENT_TYPE_DATA_PACKET;
@@ -811,7 +806,7 @@ void _pi_http_store_neterr_to_queue(SoupMessage *msg)
 	q_event_t *da_event = NULL;
 	int session_table_entry = -1;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	error_type = _translate_error_code(msg->status_code);
 
@@ -877,7 +872,7 @@ void _pi_http_finished_cb(SoupSession *session, SoupMessage *msg, gpointer data)
 {
 	char *url = NULL;
 
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (!msg) {
 		DA_LOG_ERR(HTTPManager, "Check NULL:msg");
@@ -908,7 +903,7 @@ void _pi_http_finished_cb(SoupSession *session, SoupMessage *msg, gpointer data)
 /* this callback is called in case of redirection */
 void _pi_http_restarted_cb(SoupMessage *msg, gpointer data)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 	/* Location URL is needed when extracting the file name from url.
 	 * So, the response header should be handled by http mgr.*/
 
@@ -926,7 +921,7 @@ void _pi_http_restarted_cb(SoupMessage *msg, gpointer data)
 
 void _pi_http_gotheaders_cb(SoupMessage *msg, gpointer data)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (!msg) {
 		DA_LOG_ERR(HTTPManager, "Check NULL:msg");
@@ -956,7 +951,7 @@ void _pi_http_gotheaders_cb(SoupMessage *msg, gpointer data)
 void _pi_http_contentsniffed_cb(SoupMessage *msg, const char *sniffedType,
 		GHashTable *params, gpointer data)
 {
-	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGD(HTTPManager);
 
 	if (!msg) {
 		DA_LOG_ERR(HTTPManager, "Check NULL:msg");
@@ -981,7 +976,7 @@ void _pi_http_contentsniffed_cb(SoupMessage *msg, const char *sniffedType,
 
 void _pi_http_gotchunk_cb(SoupMessage *msg, SoupBuffer *chunk, gpointer data)
 {
-//	DA_LOG_FUNC_START(HTTPManager);
+//	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!msg) {
 		DA_LOG_ERR(HTTPManager, "Check NULL:msg");

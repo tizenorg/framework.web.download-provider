@@ -65,19 +65,19 @@ da_result_t get_extension_from_mime_type(char *mime_type, char **extension)
 	da_result_t ret = DA_RESULT_OK;
 	char *ext = DA_NULL;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 	if (DA_NULL == mime_type || DA_NULL == extension) {
 		DA_LOG_ERR(Default,"received mime_type is null");
 		ret = DA_ERR_INVALID_ARGUMENT;
 		goto ERR;
 	}
-	DA_SECURE_LOGD("input mime type = %s", mime_type);
+//	DA_SECURE_LOGD("input mime type = %s", mime_type);
 	if (DA_RESULT_OK != (ret = da_mime_get_ext_name(mime_type, &ext))) {
 		DA_LOG_ERR(Default,"can't find proper extension!");
 		goto ERR;
 	}
 	*extension = ext;
-	DA_SECURE_LOGD("found extension = %s", *extension);
+//	DA_SECURE_LOGD("found extension = %s", *extension);
 
 ERR:
 	return ret;
@@ -144,7 +144,7 @@ da_result_t get_available_memory(da_storage_size_t *avail_memory)
 	struct statfs filesys_info = {0, };
 	char *default_install_dir = NULL;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGD(Default);
 
 	if (!avail_memory)
 		return DA_ERR_INVALID_ARGUMENT;
@@ -178,8 +178,6 @@ da_mime_type_id_t get_mime_type_id(char *content_type)
 {
 	int i = 0;
 
-	DA_LOG_FUNC_START(Default);
-
 	if (content_type == NULL) {
 		DA_LOG_CRITICAL(Default, "No Mime Type Id");
 		return DA_MIME_TYPE_NONE;
@@ -192,7 +190,7 @@ da_mime_type_id_t get_mime_type_id(char *content_type)
 		}
 		i++;
 	}
-	DA_LOG_VERBOSE(Default, "dd mime type check: index[%d] type[%d]", i, descriptor_mime_table[i].mime_type);
+	//DA_LOG_VERBOSE(Default, "dd mime type check: index[%d] type[%d]", i, descriptor_mime_table[i].mime_type);
 	return descriptor_mime_table[i].mime_type;
 }
 
@@ -276,7 +274,7 @@ da_result_t move_file(const char *from_path, const char *to_path)
 
 void remove_file(const char *file_path)
 {
-	DA_LOG_FUNC_START(FileManager);
+	DA_LOG_FUNC_LOGD(FileManager);
 
 	if (file_path && is_file_exist(file_path)) {
 		DA_SECURE_LOGD("remove file [%s]", file_path);

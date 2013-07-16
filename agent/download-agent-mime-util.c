@@ -69,7 +69,7 @@ pthread_mutex_t mutex_for_xdgmime = PTHREAD_MUTEX_INITIALIZER;
 
 da_bool_t is_ambiguous_MIME_Type(const char *in_mime_type)
 {
-//	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (!in_mime_type)
 		return DA_FALSE;
@@ -95,14 +95,14 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 	char ext_temp[DA_MAX_STR_LEN] = {0,};
 	char *temp = NULL;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (DA_NULL == mime || DA_NULL == ext) {
 		ret = DA_ERR_INVALID_ARGUMENT;
 		DA_LOG_ERR(Default,"Invalid mime type");
 		goto ERR;
 	}
-	DA_SECURE_LOGD("mime str[%s]ptr[%p]len[%d]",mime,mime,strlen(mime));
+//	DA_SECURE_LOGD("mime str[%s]ptr[%p]len[%d]",mime,mime,strlen(mime));
 	/* unaliased_mimetype means representative mime among similar types */
 	_da_thread_mutex_lock(&mutex_for_xdgmime);
 	unaliased_mimetype = xdg_mime_unalias_mime_type(mime);
@@ -151,7 +151,7 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 					break;
 				}
 			}
-			DA_LOG(Default,"index[%d]\n",i);
+			DA_LOG_VERBOSE(Default,"index[%d]\n",i);
 			/* If there is a mime at extension transform table */
 			if (i < MAX_EXT_TABLE_INDEX) {
 				break;
@@ -159,7 +159,7 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 			DA_SECURE_LOGD("extlist[%s]\n",*extlist);
 			extlist++;
 		}
-		DA_SECURE_LOGD("extension from shared mime info[%s]",ext_temp);
+//		DA_SECURE_LOGD("extension from shared mime info[%s]",ext_temp);
 	}
 
 	if (strlen(ext_temp) < 1) {
@@ -207,7 +207,7 @@ da_bool_t da_get_extension_name_from_url(char *url, char **ext)
 	char *temp_str = DA_NULL;
 	int buf_len = 0;
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (DA_NULL == url || DA_NULL == ext) {
 		ret = DA_FALSE;
@@ -259,7 +259,7 @@ da_bool_t da_get_file_name_from_url(char *url, char **name)
 	int len_name = 0;
 	char name_buff[DA_MAX_FILE_PATH_LEN] = {0,};
 
-	DA_LOG_FUNC_START(Default);
+	DA_LOG_FUNC_LOGD(Default);
 
 	if (DA_NULL == url || DA_NULL == name) {
 		ret = DA_FALSE;
@@ -338,16 +338,16 @@ da_bool_t da_get_file_name_from_url(char *url, char **name)
 		if (End != NULL) {
 			*End = '\0';
 		}
-		DA_SECURE_LOGD("file name BEFORE removing prohibited character = %s", name_buff);
+//		DA_SECURE_LOGD("file name BEFORE removing prohibited character = %s", name_buff);
 		delete_prohibited_char(name_buff, strlen(name_buff));
-		DA_SECURE_LOGD("file name AFTER removing prohibited character = %s", name_buff);
+//		DA_SECURE_LOGD("file name AFTER removing prohibited character = %s", name_buff);
 		len_name = strlen(name_buff);
 		*name = (char*) calloc(1, len_name + 1);
 		if (*name) {
 			strncpy(*name, name_buff,len_name);
 		}
 	}
-	DA_SECURE_LOGD("Extracted file name : %s", *name);
+//	DA_SECURE_LOGD("Extracted file name : %s", *name);
 ERR:
 	if (buff) {
 		free (buff);

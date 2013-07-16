@@ -36,7 +36,7 @@ void destroy_client_noti(client_noti_t *client_noti);
 
 da_result_t init_client_app_mgr()
 {
-	DA_LOG_FUNC_START(ClientNoti);
+	DA_LOG_FUNC_LOGD(ClientNoti);
 
 	if(client_app_mgr.is_init)
 		return DA_RESULT_OK;
@@ -61,7 +61,7 @@ da_result_t reg_client_app(
 	client_queue_t *queue = DA_NULL;
 	client_noti_t *client_noti = DA_NULL;
 
-	DA_LOG_FUNC_START(ClientNoti);
+	DA_LOG_FUNC_LOGD(ClientNoti);
 
 	memset(&(client_app_mgr.client_app_info.client_callback),
 			0, sizeof(da_client_cb_t));
@@ -90,7 +90,7 @@ da_result_t dereg_client_app(void)
 {
 	client_noti_t *client_noti = DA_NULL;
 
-	DA_LOG_FUNC_START(ClientNoti);
+	DA_LOG_FUNC_LOGD(ClientNoti);
 
 	client_noti = (client_noti_t *)calloc(1, sizeof(client_noti_t));
 	if (!client_noti) {
@@ -143,7 +143,7 @@ da_result_t send_client_paused_info(int slot_id)
 	user_paused_info_t *paused_info = DA_NULL;
 	download_state_t state = GET_DL_STATE_ON_ID(slot_id);
 
-	DA_LOG_FUNC_START(ClientNoti);
+	DA_LOG_FUNC_LOGD(ClientNoti);
 
 	if (!GET_DL_ENABLE_PAUSE_UPDATE(slot_id)) {
 		DA_LOG(ClientNoti, "Do not call pause cb");
@@ -190,7 +190,7 @@ da_result_t  send_client_update_progress_info (
 	client_noti_t *client_noti = DA_NULL;
 	user_progress_info_t *progress_info = DA_NULL;
 
-	//DA_LOG_FUNC_START(ClientNoti);
+	DA_LOG_FUNC_LOGV(ClientNoti);
 
 	if (!is_valid_slot_id(slot_id)) {
 		DA_LOG_ERR(ClientNoti, "Download ID is not valid");
@@ -234,7 +234,7 @@ da_result_t  send_client_update_dl_info (
 	user_download_info_t *update_dl_info = DA_NULL;
 	int len = 0;
 
-	DA_LOG_FUNC_START(ClientNoti);
+	DA_LOG_FUNC_LOGV(ClientNoti);
 
 	if (!is_valid_slot_id(slot_id)) {
 		DA_LOG_ERR(ClientNoti, "Download ID is not valid");
@@ -295,7 +295,7 @@ da_result_t  send_client_finished_info (
 	client_noti_t *client_noti = DA_NULL;
 	user_finished_info_t *finished_info = DA_NULL;
 
-	DA_LOG_FUNC_START(ClientNoti);
+	DA_LOG_FUNC_LOGV(ClientNoti);
 
 	if (!is_valid_slot_id(slot_id)) {
 		DA_LOG_ERR(ClientNoti, "Download ID is not valid");
@@ -326,7 +326,7 @@ da_result_t  send_client_finished_info (
 		finished_info->etag = strdup(etag);
 		DA_SECURE_LOGD("pushing finished info. etag[%s]", etag);
 	}
-	DA_LOG(ClientNoti, "user_data=%p", client_noti->user_data);
+	DA_LOG_VERBOSE(ClientNoti, "user_data=%p", client_noti->user_data);
 	DA_LOG(ClientNoti, "http_status=%d", http_status);
 	DA_LOG(ClientNoti, "pushing slot_id=%d, dl_id=%d err=%d", slot_id, dl_id, error);
 
@@ -339,14 +339,14 @@ da_result_t  __launch_client_thread(void)
 {
 	pthread_t thread_id = DA_NULL;
 
-	DA_LOG_FUNC_START(Thread);
+	DA_LOG_FUNC_LOGV(Thread);
 
 	if (pthread_create(&thread_id, DA_NULL,
 			__thread_for_client_noti,DA_NULL) < 0) {
 		DA_LOG_ERR(Thread, "making thread failed..");
 		return DA_ERR_FAIL_TO_CREATE_THREAD;
 	}
-	DA_LOG(Thread, "client mgr thread id[%d]", thread_id);
+	DA_LOG_VERBOSE(Thread, "client mgr thread id[%d]", thread_id);
 	client_app_mgr.thread_id = thread_id;
 	return DA_RESULT_OK;
 }
@@ -394,8 +394,6 @@ void push_client_noti(client_noti_t *client_noti)
 	client_noti_t *head = DA_NULL;
 	client_noti_t *pre = DA_NULL;
 	client_noti_t *cur = DA_NULL;
-
-	/* DA_LOG_FUNC_START(ClientNoti); */
 
 	queue = &(client_app_mgr.client_queue);
 	_da_thread_mutex_lock (&(queue->mutex_client_queue));
@@ -449,8 +447,6 @@ void __pop_client_noti(client_noti_t **out_client_noti)
 {
 	client_queue_t *queue = DA_NULL;
 
-	/* DA_LOG_FUNC_START(ClientNoti); */
-
 	queue = &(client_app_mgr.client_queue);
 
 	_da_thread_mutex_lock (&(queue->mutex_client_queue));
@@ -479,9 +475,6 @@ void __pop_client_noti(client_noti_t **out_client_noti)
 void __client_q_goto_sleep_without_lock(void)
 {
 	client_queue_t *queue = DA_NULL;
-
-	/* DA_LOG_FUNC_START(ClientNoti); */
-
 	queue = &(client_app_mgr.client_queue);
 	_da_thread_cond_wait(&(queue->cond_client_queue), &(queue->mutex_client_queue));
 }
@@ -489,9 +482,6 @@ void __client_q_goto_sleep_without_lock(void)
 void __client_q_wake_up_without_lock(void)
 {
 	client_queue_t *queue = DA_NULL;
-
-	/* DA_LOG_FUNC_START(ClientNoti); */
-
 	queue = &(client_app_mgr.client_queue);
 	_da_thread_cond_signal(&(queue->cond_client_queue));
 }
@@ -508,7 +498,7 @@ static void *__thread_for_client_noti(void *data)
 	client_queue_t *queue = DA_NULL;
 	client_noti_t *client_noti = DA_NULL;
 
-	//DA_LOG_FUNC_START(Thread);
+	DA_LOG_FUNC_LOGV(Thread);
 
 	_da_thread_mutex_lock(&(client_app_mgr.mutex_client_mgr));
 	client_app_mgr.is_thread_init = DA_TRUE;
