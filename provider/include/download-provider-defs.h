@@ -40,7 +40,7 @@ typedef enum {
 } dp_state_type;
 
 typedef enum {
-	DP_ERROR_NONE = 0,
+	DP_ERROR_NONE = 10,
 	DP_ERROR_INVALID_PARAMETER = DP_ERROR_NONE + 1,
 	DP_ERROR_OUT_OF_MEMORY = DP_ERROR_NONE + 2,
 	DP_ERROR_IO_ERROR = DP_ERROR_NONE + 3,
