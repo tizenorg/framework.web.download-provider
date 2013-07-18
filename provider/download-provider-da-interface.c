@@ -217,15 +217,15 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 			DP_DB_COL_TYPE_INT, &request->state) < 0)
 		TRACE_ERROR("[ERROR][%d][SQL]", request->id);
 
-	if (request->group && request->group->event_socket >= 0 &&
-		request->state_cb)
-		dp_ipc_send_event(request->group->event_socket,
-			request->id, DP_STATE_DOWNLOADING, DP_ERROR_NONE, 0);
-
 	if (request->auto_notification)
 		request->noti_priv_id =
 			dp_set_downloadinginfo_notification
 				(request->id, request->packagename);
+
+	if (request->group && request->group->event_socket >= 0 &&
+		request->state_cb)
+		dp_ipc_send_event(request->group->event_socket,
+			request->id, DP_STATE_DOWNLOADING, DP_ERROR_NONE, 0);
 
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 }
@@ -262,17 +262,17 @@ static void __progress_cb(user_progress_info_t *info, void *user_data)
 		// send event every 1 second.
 		if (request->progress_lasttime != localTime->tm_sec) {
 			request->progress_lasttime = localTime->tm_sec;
+			if (request->auto_notification)
+				dp_update_downloadinginfo_notification
+					(request->noti_priv_id,
+					(double)request->received_size,
+					(double)request->file_size);
 			if (request->progress_cb && request->group &&
 				request->group->event_socket >= 0 &&
 				request->received_size > 0)
 				dp_ipc_send_event(request->group->event_socket,
 					request->id, request->state, request->error,
 					request->received_size);
-			if (request->auto_notification)
-				dp_update_downloadinginfo_notification
-					(request->noti_priv_id,
-					(double)request->received_size,
-					(double)request->file_size);
 		}
 	}
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
@@ -513,6 +513,13 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 	request->state = state;
 	request->error = errorcode;
 
+	// to prevent the crash . check packagename of request
+	if (request->auto_notification && request->packagename != NULL) {
+		request->noti_priv_id =
+			dp_set_downloadedinfo_notification(request->noti_priv_id,
+				request->id, request->packagename, request->state);
+	}
+
 	// stay on memory till called destroy by client or timeout
 	if (request->group != NULL && request->group->event_socket >= 0) {
 		/* update the received file size.
@@ -527,12 +534,6 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 				request->id, request->state, request->error, 0);
 		request->group->queued_count--;
 	}
-
-	// to prevent the crash . check packagename of request
-	if (request->auto_notification && request->packagename != NULL)
-		request->noti_priv_id =
-			dp_set_downloadedinfo_notification(request->noti_priv_id,
-				request->id, request->packagename, request->state);
 
 	request->stop_time = (int)time(NULL);
 
