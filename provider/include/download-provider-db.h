@@ -209,6 +209,8 @@ int dp_db_get_list_by_limit_time(dp_request_slots *requests, int limit);
 
 int dp_db_insert_columns(char *table, int column_count,
 						db_conds_list_fmt *columns);
+int dp_db_update_columns(int id, char *table, int column_count,
+						db_conds_list_fmt *columns);
 
 int dp_db_get_conds_rows_count(char *table, char *getcolumn, char *op,
 						int conds_count, db_conds_list_fmt *conds);
@@ -219,4 +221,7 @@ int dp_db_get_conds_list(char *table, char *getcolumn,
 						char *ordercolumn, char *ordering,
 						char *op, int conds_count,
 						db_conds_list_fmt *conds);
+
+int dp_db_request_new_logging(const int id, const int state, const char *pkgname);
+int dp_db_request_update_status(const int id, const int state, const int download_error);
 #endif

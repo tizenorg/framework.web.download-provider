@@ -285,6 +285,35 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 		request->state_cb = 0;
 		request->progress_cb = 0;
 
+		// care started requests (queued, connecting, downloading)
+		int auto_download = dp_db_get_int_column(request->id,
+				DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_AUTO_DOWNLOAD);
+		if (auto_download <= 0) {
+			// cancel the requests which not setted auto-downloading
+			TRACE_INFO("[CLEAR][%d] no-auto state:%s",
+				request->id, dp_print_state(request->state));
+
+			if (dp_db_request_update_status(request->id, state,
+					errorcode) < 0) {
+				TRACE_ERROR("[fail][%d][sql] set state:%s error:%s",
+					request->id, dp_print_state(state),
+					dp_print_errorcode(errorcode));
+			} else {
+				// regardless errorcode, if success to update the state.
+				if (request->agent_id >= 0) {
+					TRACE_INFO("[%d]cancel_agent(%d) state:%s error:%s",
+						request->id, request->agent_id,
+						dp_print_state(state),
+						dp_print_errorcode(errorcode));
+					if (dp_cancel_agent_download(request->agent_id) < 0)
+						TRACE_ERROR("[fail][%d]cancel_agent", request->id);
+				}
+				CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
+				dp_request_slot_free(&privates->requests[i]);
+				continue;
+			}
+		}
+>>>>>>> 1c705e5... the speed improvement of logging to SQL
 		CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 
 	}
@@ -1244,11 +1273,7 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 	is_checked = 1;
 	switch(cmd->cmd) {
 	case DP_CMD_DESTROY:
-		if (request == NULL) {// just update the state
-			if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-					DP_DB_COL_TYPE_INT, &read_int) < 0)
-				errorcode = DP_ERROR_OUT_OF_MEMORY;
-		} else { // call cancel in some cases
+		if (request != NULL) {// just update the state
 			if (__is_started(request->state) == 0) {
 				read_int = DP_STATE_CANCELED;
 				if (dp_db_set_column(cmd->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
@@ -1958,16 +1983,10 @@ void *dp_thread_requests_manager(void *arg)
 					CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 					dp_request_slot_free(&privates->requests[i]);
 					// no problem although updating is failed.
-					if (dp_db_set_column(download_id, DP_DB_TABLE_LOG,
-							DP_DB_COL_STATE, DP_DB_COL_TYPE_INT,
-							&state) < 0)
-						TRACE_ERROR("[fail][%d][sql] set state:%s",
-							download_id, dp_print_state(state));
-					if (dp_db_set_column(download_id, DP_DB_TABLE_LOG,
-							DP_DB_COL_ERRORCODE, DP_DB_COL_TYPE_INT,
-							&errorcode) < 0)
-						TRACE_ERROR("[fail][%d][sql] set error:%s",
-							download_id, dp_print_errorcode(errorcode));
+					if (dp_db_request_update_status(download_id, state, errorcode) < 0) {
+						TRACE_ERROR("[fail][%d][sql] set state:%s error:%s",
+							download_id, dp_print_state(state), dp_print_errorcode(errorcode));
+					}
 					continue;
 				}
 

@@ -190,10 +190,9 @@ static void *__request_download_start_agent(void *args)
 		dp_ipc_send_event(request->group->event_socket,
 			request->id, request->state, request->error, 0);
 	}
-	if (dp_db_set_column
-			(request->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-			DP_DB_COL_TYPE_INT, &request->state) < 0)
+	if (dp_db_request_update_status(request->id, request->state, request->error) < 0) {
 		TRACE_ERROR("[ERROR][%d][SQL]", request->id);
+	}
 
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 
