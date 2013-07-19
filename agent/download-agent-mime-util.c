@@ -24,7 +24,7 @@
 #include "download-agent-pthread.h"
 
 #define IS_PROHIBITED_CHAR(c)	((c) == ';' || (c) == '\\' || (c) == '/' || (c) == ':' || (c) == '*' || (c) == '?' || (c) == '"' || (c) == '>' || (c) == '<' || (c) == '|' || (c) == '(' || (c) == ')')
-#define IS_SPACE_CHARACTER(c)	((c) == ' ' || (c) == '\t')
+#define IS_SPACE_CHARACTER(c)	((c) == '\t')
 
 #define MAX_EXT_TABLE_INDEX 16
 Ext_translation_table ext_trans_table [MAX_EXT_TABLE_INDEX] = {
