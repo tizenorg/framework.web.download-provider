@@ -921,8 +921,7 @@ static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *
 		break;
 	case DP_CMD_GET_STATE:
 		if (request == NULL) {
-			read_int = dp_db_get_int_column(cmd->id,
-					DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+			read_int =  dp_db_get_state(cmd->id);
 		} else {
 			read_int = request->state;
 		}
@@ -1295,8 +1294,7 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 	{
 		// to check fastly, divide the case by request value
 		if (request == NULL) {
-			dp_state_type state = dp_db_get_int_column(cmd->id,
-					DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+			dp_state_type state = dp_db_get_state(cmd->id);
 			// already paused or stopped
 			if (state > DP_STATE_DOWNLOADING) {
 				errorcode = DP_ERROR_INVALID_STATE;
@@ -1353,8 +1351,7 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 	{
 		// to check fastly, divide the case by request value
 		if (request == NULL) {
-			dp_state_type state = dp_db_get_int_column(cmd->id,
-					DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+			dp_state_type state = dp_db_get_state(cmd->id);
 			// already paused or stopped
 			if (__is_stopped(state) == 0) {
 				errorcode = DP_ERROR_INVALID_STATE;

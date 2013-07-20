@@ -47,6 +47,7 @@ typedef enum {
 sqlite3 *g_dp_db_handle = 0;
 sqlite3_stmt *g_dp_db_logging_new_stmt = NULL;
 sqlite3_stmt *g_dp_db_logging_status_stmt = NULL;
+sqlite3_stmt *g_dp_db_logging_get_state_stmt = NULL;
 
 static void __dp_finalize(sqlite3_stmt *stmt)
 {
@@ -2044,7 +2045,7 @@ int dp_db_request_new_logging(const int id, const int state, const char *pkgname
 
 		ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &g_dp_db_logging_new_stmt, NULL);
 		sqlite3_free(query);
-		if ( ret != SQLITE_OK) {
+		if (ret != SQLITE_OK) {
 			TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
 			return -1;
 		}
@@ -2099,7 +2100,7 @@ int dp_db_request_update_status(const int id, const int state, const int downloa
 
 		ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &g_dp_db_logging_status_stmt, NULL);
 		sqlite3_free(query);
-		if ( ret != SQLITE_OK) {
+		if (ret != SQLITE_OK) {
 			TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
 			return -1;
 		}
@@ -2126,4 +2127,48 @@ int dp_db_request_update_status(const int id, const int state, const int downloa
 		return 0;
 	}
 	return -1;
+}
+
+int dp_db_get_state(int id)
+{
+	if (id <= 0) {
+		TRACE_ERROR("[CHECK ID]");
+		return -1;
+	}
+
+	if (__dp_sql_open() < 0) {
+		TRACE_ERROR("[OPEN] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	if (g_dp_db_logging_get_state_stmt == NULL) {
+		char *query = sqlite3_mprintf("SELECT %s FROM %s WHERE %s = ?",
+				DP_DB_COL_STATE, DP_DB_TABLE_LOG, DP_DB_COL_ID);
+		if (query == NULL) {
+			TRACE_ERROR("[CHECK COMBINE]");
+			return -1;
+		}
+
+		TRACE_DEBUG("query:%s", query);
+
+		int ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &g_dp_db_logging_get_state_stmt, NULL);
+		sqlite3_free(query);
+		if (ret != SQLITE_OK) {
+			TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+			return -1;
+		}
+	}
+
+	if (sqlite3_bind_int(g_dp_db_logging_get_state_stmt, 1, id) != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_db_reset(g_dp_db_logging_get_state_stmt);
+		return -1;
+	}
+
+	int state = DP_STATE_NONE;
+	if (sqlite3_step(g_dp_db_logging_get_state_stmt) == SQLITE_ROW) {
+		state = sqlite3_column_int(g_dp_db_logging_get_state_stmt, 0);
+	}
+	__dp_db_reset(g_dp_db_logging_get_state_stmt);
+	return state;
 }

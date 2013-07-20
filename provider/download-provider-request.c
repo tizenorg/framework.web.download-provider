@@ -259,8 +259,7 @@ dp_error_type dp_request_set_url(int id, dp_request *request, char *url)
 		}
 	} else {
 		// check id in logging table.
-		dp_state_type state =
-			dp_db_get_int_column(id, DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		dp_state_type state = dp_db_get_state(id);
 		// check again from logging table
 		if (state == DP_STATE_CONNECTING ||
 				state == DP_STATE_DOWNLOADING ||
@@ -299,8 +298,7 @@ dp_error_type dp_request_set_destination(int id, dp_request *request, char *dest
 		}
 	} else {
 		// check id in logging table.
-		dp_state_type state =
-			dp_db_get_int_column(id, DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		dp_state_type state = dp_db_get_state(id);
 		// check again from logging table
 		if (state == DP_STATE_CONNECTING ||
 			state == DP_STATE_DOWNLOADING ||
@@ -339,8 +337,7 @@ dp_error_type dp_request_set_filename(int id, dp_request *request, char *filenam
 		}
 	} else {
 		// check id in logging table.
-		dp_state_type state =
-			dp_db_get_int_column(id, DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		dp_state_type state = dp_db_get_state(id);
 		// check again from logging table
 		if (state == DP_STATE_CONNECTING ||
 			state == DP_STATE_DOWNLOADING ||
@@ -375,8 +372,7 @@ dp_error_type dp_request_set_notification(int id, dp_request *request, unsigned 
 		}
 	} else {
 		// check id in logging table.
-		dp_state_type state =
-			dp_db_get_int_column(id, DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		dp_state_type state = dp_db_get_state(id);
 		// check again from logging table
 		if (state == DP_STATE_COMPLETED) {
 			TRACE_ERROR("[ERROR][%d] now[%s]", id, dp_print_state(state));
@@ -408,8 +404,7 @@ dp_error_type dp_request_set_auto_download(int id, dp_request *request, unsigned
 		}
 	} else {
 		// check id in logging table.
-		dp_state_type state =
-			dp_db_get_int_column(id, DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		dp_state_type state = dp_db_get_state(id);
 		// check again from logging table
 		if (state == DP_STATE_COMPLETED) {
 			TRACE_ERROR("[ERROR][%d] now[%s]", id, dp_print_state(state));
@@ -431,8 +426,7 @@ dp_error_type dp_request_set_state_event(int id, dp_request *request, unsigned e
 {
 	if (request == NULL) {
 		// check id in logging table.
-		dp_state_type state =
-			dp_db_get_int_column(id, DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		dp_state_type state = dp_db_get_state(id);
 
 		if (state == DP_STATE_DOWNLOADING ||
 			state == DP_STATE_COMPLETED) {
@@ -458,8 +452,7 @@ dp_error_type dp_request_set_progress_event(int id, dp_request *request, unsigne
 {
 	if (request == NULL) {
 		// check id in logging table.
-		dp_state_type state =
-			dp_db_get_int_column(id, DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		dp_state_type state = dp_db_get_state(id);
 
 		if (state == DP_STATE_DOWNLOADING ||
 			state == DP_STATE_COMPLETED) {
@@ -493,8 +486,7 @@ dp_error_type dp_request_set_network_type(int id, dp_request *request, int type)
 		}
 	} else {
 		// check id in logging table.
-		dp_state_type state =
-			dp_db_get_int_column(id, DP_DB_TABLE_LOG, DP_DB_COL_STATE);
+		dp_state_type state = dp_db_get_state(id);
 		// check again from logging table
 		if (state == DP_STATE_CONNECTING ||
 			state == DP_STATE_DOWNLOADING ||
