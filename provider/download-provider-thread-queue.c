@@ -79,17 +79,15 @@ static unsigned __get_active_count(dp_request_slots *requests)
 		return 0;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
-		//CLIENT_MUTEX_LOCK(&requests[i].mutex);
-		if (pthread_mutex_trylock(&requests[i].mutex) != 0) {
-			count++;
-			continue;
-		}
+		int locked = pthread_mutex_trylock(&requests[i].mutex);
+		// locking failure means it used by other thread.
 		if (requests[i].request != NULL) {
 			if (requests[i].request->state == DP_STATE_CONNECTING ||
 				requests[i].request->state == DP_STATE_DOWNLOADING)
 				count++;
 		}
-		CLIENT_MUTEX_UNLOCK(&requests[i].mutex);
+		if (locked == 0)
+			CLIENT_MUTEX_UNLOCK(&requests[i].mutex);
 	}
 	return count;
 }
@@ -103,13 +101,12 @@ static int __get_oldest_request_with_network(dp_request_slots *requests, dp_stat
 	oldest_time++; // most last time
 	int oldest_index = -1;
 
-	if (!requests)
+	if (requests == NULL)
 		return -1;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
-		//CLIENT_MUTEX_LOCK(&requests[i].mutex);
-		if (pthread_mutex_trylock(&requests[i].mutex) != 0)
-			continue;
+		int locked = pthread_mutex_trylock(&requests[i].mutex);
+		// locking failure means it used by other thread.
 		if (requests[i].request != NULL) {
 			if (requests[i].request->state == state &&
 				requests[i].request->start_time > 0 &&
@@ -120,7 +117,8 @@ static int __get_oldest_request_with_network(dp_request_slots *requests, dp_stat
 				oldest_index = i;
 			}
 		}
-		CLIENT_MUTEX_UNLOCK(&requests[i].mutex);
+		if (locked == 0)
+			CLIENT_MUTEX_UNLOCK(&requests[i].mutex);
 	}
 	return oldest_index;
 }
