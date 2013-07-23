@@ -239,7 +239,7 @@ da_result_t send_user_noti_and_finish_download_flow(
 		int slot_id, char *installed_path, char *etag)
 {
 	da_result_t ret = DA_RESULT_OK;
-	download_state_t download_state = DA_NULL;
+	download_state_t download_state = HTTP_STATE_READY_TO_DOWNLOAD;
 	da_bool_t need_destroy_download_info = DA_FALSE;
 
 	DA_LOG_FUNC_LOGV(Default);

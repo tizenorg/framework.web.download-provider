@@ -357,7 +357,7 @@ void init_q_event_data_http(q_event_t *q_event)
 		q_event_data_http = &(q_event->type.q_event_data_http);
 
 		if(q_event_data_http) {
-			q_event_data_http->status_code = DA_NULL;
+			q_event_data_http->status_code = 0;
 			if(q_event_data_http->http_response_msg) {
 				http_msg_response_destroy(&(q_event_data_http->http_response_msg));
 				q_event_data_http->http_response_msg = DA_NULL;
@@ -369,7 +369,7 @@ void init_q_event_data_http(q_event_t *q_event)
 					q_event_data_http->body_data = DA_NULL;
 				}
 			}
-			q_event_data_http->error_type = DA_NULL;
+			q_event_data_http->error_type = 0;
 		}
 	}
 }
@@ -383,7 +383,7 @@ void init_q_event_control(q_event_t *q_event)
 	if(q_event->event_type == Q_EVENT_TYPE_CONTROL) {
 		q_event_control = &(q_event->type.q_event_control);
 		if(q_event_control) {
-			q_event_control->control_type = DA_NULL;
+			q_event_control->control_type = Q_EVENT_TYPE_CONTROL_NONE;
 		}
 	}
 

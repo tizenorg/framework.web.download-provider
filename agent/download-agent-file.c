@@ -27,6 +27,7 @@
 #include "download-agent-mime-util.h"
 #include "download-agent-http-mgr.h"
 #include "download-agent-plugin-conf.h"
+#include "download-agent-plugin-drm.h"
 
 #ifdef _ENABLE_OMA_DRM
 #include "download-agent-plugin-drm.h"

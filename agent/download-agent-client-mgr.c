@@ -336,7 +336,7 @@ da_result_t  send_client_finished_info (
 
 da_result_t  __launch_client_thread(void)
 {
-	pthread_t thread_id = DA_NULL;
+	pthread_t thread_id = 0;
 
 	DA_LOG_FUNC_LOGV(Thread);
 

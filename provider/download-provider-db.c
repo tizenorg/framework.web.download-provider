@@ -2201,7 +2201,6 @@ int dp_db_request_new_logging(const int id, const int state, const char *pkgname
 	int errorcode = SQLITE_OK;
 	int ret = -1;
 	char *query = NULL;
-	int i = 0;
 
 	if (__dp_sql_open() < 0) {
 		TRACE_ERROR("[SQL HANDLE] [%s]", sqlite3_errmsg(g_dp_db_handle));
@@ -2256,7 +2255,6 @@ int dp_db_request_update_status(const int id, const int state, const int downloa
 	int errorcode = SQLITE_OK;
 	int ret = -1;
 	char *query = NULL;
-	int i = 0;
 
 	if (__dp_sql_open() < 0) {
 		TRACE_ERROR("[SQL HANDLE] [%s]", sqlite3_errmsg(g_dp_db_handle));

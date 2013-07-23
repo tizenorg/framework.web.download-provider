@@ -238,5 +238,6 @@ int dp_db_get_conds_list(char *table, char *getcolumn,
 int dp_db_request_new_logging(const int id, const int state, const char *pkgname);
 int dp_db_request_update_status(const int id, const int state, const int download_error);
 int dp_db_get_state(int id);
-
+int dp_db_request_new_logging(const int id,
+						const int state, const char *pkgname);
 #endif
