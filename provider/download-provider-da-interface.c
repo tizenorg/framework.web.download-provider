@@ -147,7 +147,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 	if (info->tmp_saved_path != NULL) {
 
 		TRACE_SECURE_DEBUG("[STARTED][%d] [%s]", request_id, info->tmp_saved_path);
-		int conds_count = 5; // id + tmp_saved_path + file_size + content_name + etag
+		int conds_count = 6; // id + tmp_saved_path + file_size + content_name + etag
 		int conds_index = 0;
 		db_conds_list_fmt conds_p[conds_count];
 		memset(&conds_p, 0x00, conds_count * sizeof(db_conds_list_fmt));
@@ -156,6 +156,12 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 		conds_p[conds_index].type = DP_DB_COL_TYPE_TEXT;
 		conds_p[conds_index].value = info->tmp_saved_path;
 		conds_index++;
+		if (info->file_type != NULL) {
+			conds_p[conds_index].column = DP_DB_COL_MIMETYPE;
+			conds_p[conds_index].type = DP_DB_COL_TYPE_TEXT;
+			conds_p[conds_index].value = info->file_type;
+			conds_index++;
+		}
 		if (info->content_name != NULL) {
 			conds_p[conds_index].column = DP_DB_COL_CONTENT_NAME;
 			conds_p[conds_index].type = DP_DB_COL_TYPE_TEXT;
