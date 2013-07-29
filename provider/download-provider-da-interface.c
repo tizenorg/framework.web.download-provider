@@ -175,6 +175,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 			conds_index++;
 		}
 		if (info->file_size > 0) {
+			request->file_size = info->file_size;
 			conds_p[conds_index].column = DP_DB_COL_CONTENT_SIZE;
 			conds_p[conds_index].type = DP_DB_COL_TYPE_INT64;
 			conds_p[conds_index].value = &info->file_size;
