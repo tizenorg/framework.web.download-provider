@@ -79,6 +79,9 @@ int dp_ipc_send_event(int fd, int id, dp_state_type state,
 char *dp_ipc_read_string(int fd)
 {
 	unsigned length = 0;
+	size_t recv_size = 0;
+	unsigned remain_size = 0;
+	size_t buffer_size = 0;
 	char *str = NULL;
 
 	if (fd < 0) {
@@ -87,7 +90,8 @@ char *dp_ipc_read_string(int fd)
 	}
 
 	// read flexible URL from client.
-	if (read(fd, &length, sizeof(unsigned)) < 0) {
+	ssize_t recv_bytes = read(fd, &length, sizeof(unsigned));
+	if (recv_bytes < 0) {
 		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
 		return NULL;
 	}
@@ -96,10 +100,30 @@ char *dp_ipc_read_string(int fd)
 		return NULL;
 	}
 	str = (char *)calloc((length + 1), sizeof(char));
-	if (read(fd, str, length * sizeof(char)) < 0) {
-		TRACE_STRERROR("[ERROR] read FD[%d]", fd);
+	if (str == NULL) {
+		TRACE_STRERROR("[ERROR] calloc length:%d FD[%d]", length, fd);
+		return NULL;
+	}
+	remain_size = length;
+	do {
+		buffer_size = 0;
+		if (remain_size > DP_DEFAULT_BUFFER_SIZE)
+			buffer_size = DP_DEFAULT_BUFFER_SIZE;
+		else
+			buffer_size = remain_size;
+		recv_size = (size_t)read(fd, str + (int)(length - remain_size),
+				buffer_size * sizeof(char));
+		if (recv_size > DP_DEFAULT_BUFFER_SIZE) {
+			recv_size = -1;
+			break;
+		}
+		if (recv_size > 0)
+			remain_size = remain_size - (unsigned)recv_size;
+	} while (recv_size > 0 && remain_size > 0);
+
+	if (recv_size == 0) {
+		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
 		free(str);
-		str = NULL;
 		return NULL;
 	}
 	str[length] = '\0';
@@ -164,7 +188,8 @@ int dp_ipc_read_custom_type(int fd, void *value, size_t type_size)
 		return -1;
 	}
 
-	if (read(fd, value, type_size) < 0) {
+	ssize_t recv_bytes = read(fd, value, type_size);
+	if (recv_bytes < 0) {
 		TRACE_STRERROR("[ERROR] read FD[%d]", fd);
 		return -1;
 	}

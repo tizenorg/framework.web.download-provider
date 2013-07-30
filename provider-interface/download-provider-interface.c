@@ -370,7 +370,8 @@ static int __ipc_read_custom_type(int fd, void *value, size_t type_size)
 		return -1;
 	}
 
-	if (read(fd, value, type_size) < 0) {
+	ssize_t recv_bytes = read(fd, value, type_size);
+	if (recv_bytes < 0) {
 		TRACE_STRERROR("[CRITICAL] read");
 		return -1;
 	}
@@ -385,7 +386,8 @@ static int __ipc_read_int(int fd)
 		TRACE_ERROR("[CHECK SOCKET]");
 		return -1;
 	}
-	if (read(fd, &value, sizeof(int)) < 0) {
+	ssize_t recv_bytes = read(fd, &value, sizeof(int));
+	if (recv_bytes < 0) {
 		TRACE_STRERROR("[CRITICAL] read");
 		return -1;
 	}
@@ -417,15 +419,20 @@ static int __ipc_read_download_id(int fd)
 static char *__ipc_read_string(int fd)
 {
 	unsigned length = 0;
+	size_t recv_size = 0;
+	unsigned remain_size = 0;
+	size_t buffer_size = 0;
 	char *str = NULL;
 
 	if (fd < 0) {
-		TRACE_ERROR("[CHECK FD]");
+		TRACE_ERROR("[ERROR] CHECK FD[%d]", fd);
 		return NULL;
 	}
 
-	if (read(fd, &length, sizeof(unsigned)) < 0) {
-		TRACE_STRERROR("failed to read length [%d]", length);
+	// read flexible URL from client.
+	ssize_t recv_bytes = read(fd, &length, sizeof(unsigned));
+	if (recv_bytes < 0) {
+		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
 		return NULL;
 	}
 	if (length < 1 || length > DP_MAX_URL_LEN) {
@@ -434,13 +441,29 @@ static char *__ipc_read_string(int fd)
 	}
 	str = (char *)calloc((length + 1), sizeof(char));
 	if (str == NULL) {
-		TRACE_STRERROR("[CRITICAL] allocation");
+		TRACE_STRERROR("[ERROR] calloc length:%d FD[%d]", length, fd);
 		return NULL;
 	}
-	if (read(fd, str, length * sizeof(char)) < 0) {
-		TRACE_STRERROR("failed to read string");
+	remain_size = length;
+	do {
+		buffer_size = 0;
+		if (remain_size > DP_DEFAULT_BUFFER_SIZE)
+			buffer_size = DP_DEFAULT_BUFFER_SIZE;
+		else
+			buffer_size = remain_size;
+		recv_size = (size_t)read(fd, str + (int)(length - remain_size),
+				buffer_size * sizeof(char));
+		if (recv_size > DP_DEFAULT_BUFFER_SIZE) {
+			recv_size = -1;
+			break;
+		}
+		if (recv_size > 0)
+			remain_size = remain_size - (unsigned)recv_size;
+	} while (recv_size > 0 && remain_size > 0);
+
+	if (recv_size == 0) {
+		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
 		free(str);
-		str = NULL;
 		return NULL;
 	}
 	str[length] = '\0';
@@ -455,8 +478,8 @@ static dp_error_type __ipc_return(int fd)
 		TRACE_ERROR("[CHECK SOCKET]");
 		return DP_ERROR_IO_ERROR;
 	}
-
-	if (read(fd, &errorcode, sizeof(dp_error_type)) < 0) {
+	ssize_t recv_bytes = read(fd, &errorcode, sizeof(dp_error_type));
+	if (recv_bytes < 0) {
 		TRACE_STRERROR("[CRITICAL] read");
 		return __get_standard_errorcode(DP_ERROR_IO_ERROR);
 	}
@@ -478,7 +501,8 @@ static dp_event_info* __ipc_event(int fd)
 		TRACE_ERROR("[CHECK ALLOCATION]");
 		return NULL;
 	}
-	if (read(fd, event, sizeof(dp_event_info)) < 0) {
+	ssize_t recv_bytes = read(fd, event, sizeof(dp_event_info));
+	if (recv_bytes < 0) {
 		TRACE_STRERROR("[CRITICAL] read");
 		free(event);
 		return NULL;

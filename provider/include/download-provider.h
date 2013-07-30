@@ -29,6 +29,7 @@ extern "C" {
 #define DP_MAX_STR_LEN 256
 #define DP_MAX_PATH_LEN DP_MAX_STR_LEN
 #define DP_MAX_URL_LEN 2048
+#define DP_DEFAULT_BUFFER_SIZE 1024
 
 typedef enum {
 	DP_CMD_NONE = 0,

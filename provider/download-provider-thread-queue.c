@@ -310,6 +310,9 @@ void *dp_thread_queue_manager(void *arg)
 
 		active_count = __get_active_count(privates->requests);
 
+		TRACE_DEBUG("Status Queue: now active[%d] max[%d]",
+					active_count, DP_MAX_DOWNLOAD_AT_ONCE);
+
 		// Start Conditions
 		// 1. state is QUEUED
 		// 2. 1 QUEUED per 1 Group : need not to check max limitation.!!
