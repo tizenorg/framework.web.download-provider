@@ -87,6 +87,11 @@ Description: download the contents in background (developement files)
 		-DBUILD_SHARED_LIBS:BOOL=ON
 
 %build
+%if 0%{?tizen_build_binary_release_type_eng}
+export CFLAGS="$CFLAGS -DTIZEN_ENGINEER_MODE"
+export CXXFLAGS="$CXXFLAGS -DTIZEN_ENGINEER_MODE"
+export FFLAGS="$FFLAGS -DTIZEN_ENGINEER_MODE"
+%endif
 %cmake .
 make %{?jobs:-j%jobs}
 
