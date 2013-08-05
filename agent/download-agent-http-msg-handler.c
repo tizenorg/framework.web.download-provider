@@ -797,7 +797,7 @@ da_bool_t __get_http_header_for_field(http_msg_response_t *http_msg_response,
 
 	http_msg_response_get_iter(http_msg_response, &http_msg_iter);
 	while (http_msg_get_header_with_iter(&http_msg_iter, &field, &header)) {
-		if (field && header && !strncmp(field, in_field, strlen(field))) {
+		if (field && header && !strncasecmp(field, in_field, strlen(field))) {
 			DA_SECURE_LOGD("[%s][%s]", field, header->value);
 			*out_header = header;
 			return DA_TRUE;
