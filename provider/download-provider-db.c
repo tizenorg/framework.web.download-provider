@@ -1906,25 +1906,23 @@ int dp_db_get_conds_list(char *table, char *getcolumn,
 		return -1;
 	}
 
+	if (ordercolumn == NULL)
+		ordercolumn = DP_DB_COL_CREATE_TIME;
+	if (ordering == NULL)
+		ordering = "ASC";
+
+	char *query = NULL;
 	char *limit = NULL;
-	char *order = NULL;
-	char *query = sqlite3_mprintf("SELECT %s FROM %s", getcolumn, table);
 	char *conditions = __get_conds_query(conds_count, conds, op);
 	if (conditions != NULL) {
-		query = __merge_strings(query, conditions, ' ');
+		query = sqlite3_mprintf("SELECT %s FROM %s %s ORDER BY %s %s",
+				getcolumn, table, conditions, ordercolumn, ordering);
 		sqlite3_free(conditions);
+	} else {
+		query = sqlite3_mprintf("SELECT %s FROM %s ORDER BY %s %s",
+				getcolumn, table, ordercolumn, ordering);
 	}
 
-	if (ordercolumn != NULL) {
-		order =
-			sqlite3_mprintf
-				("ORDER BY %s %s", ordercolumn,
-				(ordering == NULL ? "ASC" : ordering));
-		if (order != NULL) {
-			query = __merge_strings(query, order, ' ');
-			sqlite3_free(order);
-		}
-	}
 	if (rowslimit > 0) { // 0 or negative : no limitation
 		if (rowsoffset >= 0)
 			limit =
