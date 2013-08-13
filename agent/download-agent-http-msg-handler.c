@@ -332,7 +332,7 @@ da_result_t __http_header_add_field(http_header_t **head,
 		 * Remove the value which is stored before and add a new value.
 		*/
 		if (cur->field && cur->raw_value &&
-				strncmp(cur->field, field, strlen(field)) == 0) {
+				strncasecmp(cur->field, field, strlen(field)) == 0) {
 			DA_SECURE_LOGD("Remove value for replacement [%s][%s]", cur->field, cur->raw_value);
 			if (cur->field) {
 				free(cur->field);
@@ -763,7 +763,7 @@ da_bool_t __get_http_header_option_for_field(
 	cur = header_option;
 	while (cur) {
 		if (cur->field) {
-			if (!strncmp(cur->field, in_field, strlen(cur->field)) &&
+			if (!strncasecmp(cur->field, in_field, strlen(cur->field)) &&
 					cur->value) {
 				DA_SECURE_LOGD("[%s][%s]", cur->field, cur->value);
 				*out_value = cur->value;
@@ -1056,7 +1056,7 @@ da_result_t http_msg_response_get_boundary(
 	http_msg_response_get_iter(http_msg_response, &http_msg_iter);
 	while (http_msg_get_field_with_iter(&http_msg_iter, &field, &value)) {
 		if ((field != DA_NULL) && (value != DA_NULL)) {
-			if (!strncmp(field, "Content-Type",
+			if (!strncasecmp(field, "Content-Type",
 				strlen("Content-Type"))) {
 				char *org_str = NULL;
 				char *boundary_str_start = NULL;
@@ -1287,7 +1287,7 @@ da_bool_t extract_attribute_from_header(
 	startPos = index;
 
 	/* Find the end of data. */
-	if (0 == strcmp(szFindStr, "Location"))//terminate character list does not contain ';' in case of URI
+	if (0 == strncasecmp(szFindStr, "Location", strlen("Location")))//terminate character list does not contain ';' in case of URI
 	{
 		while (DA_FALSE == IS_URI_TERMINATING_CHAR(pValuePos[index])) {
 			index++;
