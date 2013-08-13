@@ -285,47 +285,6 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 		request->state_cb = 0;
 		request->progress_cb = 0;
 
-		// care started requests (queued, connecting, downloading)
-		int auto_download = dp_db_get_int_column(request->id,
-				DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_AUTO_DOWNLOAD);
-		if (auto_download <= 0) {
-			// cancel the requests which not setted auto-downloading
-			TRACE_INFO("[CLEAR][%d] no-auto state:%s",
-				request->id, dp_print_state(request->state));
-
-			if (dp_db_set_column(request->id, DP_DB_TABLE_LOG,
-					DP_DB_COL_STATE, DP_DB_COL_TYPE_INT, &state) == 0) {
-				if (dp_db_set_column(request->id, DP_DB_TABLE_LOG,
-						DP_DB_COL_ERRORCODE, DP_DB_COL_TYPE_INT,
-						&errorcode) < 0) {
-					TRACE_ERROR("[fail][%d][sql] set error:%s",
-						request->id, dp_print_errorcode(errorcode));
-				}
-				// regardless errorcode, if success to update the state.
-				if (request->agent_id >= 0) {
-					TRACE_INFO("[%d]cancel_agent(%d) state:%s error:%s",
-						request->id, request->agent_id,
-						dp_print_state(state),
-						dp_print_errorcode(errorcode));
-					if (dp_cancel_agent_download(request->agent_id) < 0)
-						TRACE_INFO("[fail][%d]cancel_agent", request->id);
-					if (request->auto_notification && request->packagename != NULL) {
-						request->state = DP_STATE_FAILED;
-						dp_set_downloadedinfo_notification(request->noti_priv_id,
-								request->id, request->packagename, request->state);
-						//reset setting. After unlock mutex, the da callback can be called
-						request->auto_notification = 0;
-					}
-
-				}
-				CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
-				dp_request_slot_free(&privates->requests[i]);
-				continue;
-			} else {
-				TRACE_ERROR("[fail][%d][sql] set state:%s", request->id,
-					dp_print_state(state));
-			}
-		}
 		CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 
 	}
