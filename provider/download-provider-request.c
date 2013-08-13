@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <time.h>
 #include <sys/time.h>
 #include <sys/statfs.h>
 #include "download-provider.h"
@@ -37,20 +36,31 @@
 /// @return	unique id combined local time and the special calculation
 static int __get_download_request_id(void)
 {
-	int uniquetime = 0;
-	struct timeval tval;
 	static int last_uniquetime = 0;
+	int uniquetime = 0;
 
 	do {
-		uniquetime = (int)time(NULL);
+		struct timeval tval;
+		int cipher = 1;
+		int c = 0;
+
 		gettimeofday(&tval, NULL);
+
+		int usec = tval.tv_usec;
+		for (c = 0; ; c++, cipher++) {
+			if ((usec /= 10) <= 0)
+				break;
+		}
 		if (tval.tv_usec == 0)
-			uniquetime = uniquetime + (tval.tv_usec + 1) % 0xfffff;
-		else
-			uniquetime = uniquetime + tval.tv_usec;
-		TRACE_INFO("ID : %d", uniquetime);
+			tval.tv_usec = (tval.tv_sec & 0x0fff);
+		int disit_unit = 10;
+		for (c = 0; c < cipher - 3; c++)
+			disit_unit = disit_unit * 10;
+		uniquetime = tval.tv_sec + ((tval.tv_usec << 2) * 100) +
+				((tval.tv_usec >> (cipher - 1)) * disit_unit) +
+				((tval.tv_usec + (tval.tv_usec % 10)) & 0x0fff);
 	} while (last_uniquetime == uniquetime);
-	last_uniquetime = uniquetime;	// store
+	last_uniquetime = uniquetime;
 	return uniquetime;
 }
 
