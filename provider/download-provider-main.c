@@ -131,9 +131,14 @@ static gboolean __dp_idle_start_service(void *data)
 
 void __set_locale()
 {
-	setlocale(LC_ALL, vconf_get_str(VCONFKEY_LANGSET));
-	bindtextdomain(PKG_NAME, LOCALE_DIR);
-	textdomain(PKG_NAME);
+	char *str = NULL;
+	str = vconf_get_str(VCONFKEY_LANGSET);
+	if (str != NULL) {
+		setlocale(LC_ALL, str);
+		bindtextdomain(PKG_NAME, LOCALE_DIR);
+		textdomain(PKG_NAME);
+	}
+	free(str);
 }
 void __lang_changed_cb(keynode_t *key, void* data)
 {
