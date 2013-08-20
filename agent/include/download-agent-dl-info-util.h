@@ -135,7 +135,7 @@ typedef struct _req_dl_info {
 #define CHANGE_HTTP_STATE(STATE,STAGE) {\
 	_da_thread_mutex_lock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(STAGE)));\
 	GET_HTTP_STATE_ON_STAGE(STAGE) = STATE;\
-	DA_LOG_CRITICAL(Default, "Changed http_state to - [%d] ", GET_HTTP_STATE_ON_STAGE(STAGE));\
+	DA_LOG_DEBUG(Default, "Changed http_state to - [%d] ", GET_HTTP_STATE_ON_STAGE(STAGE));\
 	_da_thread_mutex_unlock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(STAGE)));\
 }
 
@@ -214,7 +214,7 @@ typedef struct {
 #define CHANGE_DOWNLOAD_STATE(STATE,STAGE) {\
 	_da_thread_mutex_lock (&mutex_download_state[GET_STAGE_DL_ID(STAGE)]);\
 	GET_DL_STATE_ON_STAGE(STAGE) = STATE;\
-	DA_LOG_CRITICAL(Default, "Changed download_state to - [%d] ", GET_DL_STATE_ON_STAGE(STAGE));\
+	DA_LOG_DEBUG(Default, "Changed download_state to - [%d] ", GET_DL_STATE_ON_STAGE(STAGE));\
 	_da_thread_mutex_unlock (&mutex_download_state[GET_STAGE_DL_ID(STAGE)]);\
 	}
 

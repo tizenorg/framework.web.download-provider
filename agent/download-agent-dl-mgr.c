@@ -32,7 +32,7 @@ da_result_t requesting_download(stage_info *stage)
 	da_result_t ret = DA_RESULT_OK;
 	req_dl_info *request_session = DA_NULL;
 
-	DA_LOG_FUNC_LOGD(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (!stage) {
 		DA_LOG_ERR(Default, "stage is null..");
@@ -246,7 +246,7 @@ da_result_t send_user_noti_and_finish_download_flow(
 
 	_da_thread_mutex_lock (&mutex_download_state[slot_id]);
 	download_state = GET_DL_STATE_ON_ID(slot_id);
-	DA_LOG(Default, "state = %d", download_state);
+	DA_LOG_DEBUG(Default, "state = %d", download_state);
 	_da_thread_mutex_unlock (&mutex_download_state[slot_id]);
 
 	switch (download_state) {

@@ -70,7 +70,7 @@ int da_deinit()
 {
 	da_result_t ret = DA_RESULT_OK;
 
-	DA_LOG_FUNC_LOGD(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	deinit_http_mgr();
 	deinit_download_mgr();

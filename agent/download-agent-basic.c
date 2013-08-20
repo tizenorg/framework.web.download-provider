@@ -179,7 +179,7 @@ da_result_t start_download_with_extension(
 			goto ERR;
 		}
 	}
-	DA_LOG_CRITICAL(Thread, "download thread create slot_id[%d] thread id[%lu]",
+	DA_LOG_DEBUG(Thread, "download thread create slot_id[%d] thread id[%lu]",
 			slot_id,GET_DL_THREAD_ID(slot_id));
 
 ERR:
@@ -306,7 +306,7 @@ static void *__thread_start_download(void *data)
 		DA_LOG_ERR(Default, "STAGE ADDITION FAIL!");
 		goto ERR;
 	}
-	DA_LOG(Default, "new added Stage : %p", stage);
+	DA_LOG_VERBOSE(Default, "new added Stage : %p", stage);
 
 	GET_DL_USER_DATA(slot_id) = client_input->user_data;
 	client_input->user_data = DA_NULL;
@@ -322,8 +322,6 @@ static void *__thread_start_download(void *data)
 	ret = __make_source_info_basic_download(stage, client_input);
 
 	if (ret == DA_RESULT_OK) {
-
-
 		/* to save memory */
 		if (client_input) {
 			clean_up_client_input_info(client_input);
@@ -349,7 +347,7 @@ ERR:
 		char *etag = DA_NULL;
 		req_dl_info *request_info = NULL;
 		file_info *file_storage = NULL;
-		DA_LOG_CRITICAL(Default, "Whole download flow is finished.");
+		DA_LOG_VERBOSE(Default, "Whole download flow is finished.");
 		_da_thread_mutex_lock (&mutex_download_state[GET_STAGE_DL_ID(stage)]);
 		download_state = GET_DL_STATE_ON_STAGE(stage);
 		_da_thread_mutex_unlock (&mutex_download_state[GET_STAGE_DL_ID(stage)]);
@@ -382,7 +380,7 @@ ERR:
 	}
 
 	pthread_cleanup_pop(0);
-	DA_LOG_CRITICAL(Thread, "=====thread_start_download - EXIT=====");
+	DA_LOG_CRITICAL(Thread, "==thread_start_download - EXIT==");
 	pthread_exit((void *)NULL);
 	return DA_NULL;
 }

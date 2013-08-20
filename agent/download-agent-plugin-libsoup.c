@@ -42,7 +42,7 @@ da_result_t PI_http_init(void)
 
 void PI_http_deinit(void)
 {
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	return;
 }
@@ -207,7 +207,7 @@ da_result_t PI_http_start_transaction(const input_for_tranx_t *input_for_tranx,
 		DA_LOG_ERR(HTTPManager,"Cannot enter here");
 		break;
 	}
-	DA_LOG(HTTPManager,"msg[%p]", msg);
+	DA_LOG_VERBOSE(HTTPManager,"msg[%p]", msg);
 	/* if it is failed to create a msg, the url can be invalid, becasue of the input argument of soup_message_new API */
 	if (msg == NULL) {
 		DA_LOG_ERR(HTTPManager,"Fail to create message");
@@ -254,7 +254,7 @@ da_result_t PI_http_disconnect_transaction(int in_tranx_id)
 	da_result_t ret = DA_RESULT_OK;
 	int session_table_entry = -1;
 
-	DA_LOG(HTTPManager,"in_tranx_id = %d", in_tranx_id);
+	DA_LOG_VERBOSE(HTTPManager,"in_tranx_id = %d", in_tranx_id);
 
 	session_table_entry = in_tranx_id;
 
@@ -270,9 +270,7 @@ da_result_t PI_http_cancel_transaction(int in_tranx_id, da_bool_t abort_option)
 	SoupMessage *msg;
 	int session_table_entry = -1;
 
-	DA_LOG_FUNC_LOGD(HTTPManager);
-
-	DA_LOG(HTTPManager,"in_tranx_id = %d", in_tranx_id);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	session_table_entry = in_tranx_id;
 	if (!_pi_http_is_this_session_table_entry_using(session_table_entry)) {
@@ -291,12 +289,13 @@ da_result_t PI_http_cancel_transaction(int in_tranx_id, da_bool_t abort_option)
 		DA_LOG_ERR(HTTPManager,"invalid message = %p", msg);
 		goto ERR;
 	}
-	DA_LOG(HTTPManager,"Call soup cancel API : abort option[%d]",abort_option);
+	DA_LOG(HTTPManager,"soup cancel API:abort option[%d] tranx_id[%d]",
+			abort_option, in_tranx_id);
 	if (abort_option)
 		soup_session_abort(session);
 	else
 		soup_session_cancel_message(session, msg, SOUP_STATUS_CANCELLED);
-	DA_LOG(HTTPManager,"Call soup cancel API-Done");
+	DA_LOG(HTTPManager,"soup cancel API-Done");
 ERR:
 	return ret;
 }
@@ -622,8 +621,8 @@ void _pi_http_store_read_header_to_queue(SoupMessage *msg, const char *sniffedTy
 		http_msg_response_set_status_code(http_msg_response,
 				msg->status_code);
 
-		DA_LOG(HTTPManager,"\n----raw header---------------------------------------------");
-		DA_LOG_CRITICAL(HTTPManager,"status code = %d", msg->status_code);
+		DA_LOG_VERBOSE(HTTPManager,"\n----raw header---------------------------------------------");
+		DA_LOG(HTTPManager,"status code = %d", msg->status_code);
 		soup_message_headers_iter_init(&headers_iter,
 				msg->response_headers);
 		while (soup_message_headers_iter_next(&headers_iter,
@@ -632,10 +631,10 @@ void _pi_http_store_read_header_to_queue(SoupMessage *msg, const char *sniffedTy
 					!= DA_NULL)) {
 				http_msg_response_add_field(http_msg_response,
 						header_name, header_value);
-				DA_SECURE_LOGD("[%s][%s]", header_name, header_value);
+				DA_SECURE_LOGI("[%s][%s]", header_name, header_value);
 			}
 		}
-		DA_LOG(HTTPManager,"\n-------------------------------------------------------------\n");
+		DA_LOG_VERBOSE(HTTPManager,"\n-------------------------------------------------------------\n");
 
 	}
 
@@ -872,7 +871,7 @@ void _pi_http_finished_cb(SoupSession *session, SoupMessage *msg, gpointer data)
 {
 	char *url = NULL;
 
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!msg) {
 		DA_LOG_ERR(HTTPManager, "Check NULL:msg");
@@ -881,7 +880,7 @@ void _pi_http_finished_cb(SoupSession *session, SoupMessage *msg, gpointer data)
 
 	url = soup_uri_to_string(soup_message_get_uri(msg), DA_FALSE);
 
-	DA_SECURE_LOGD("status_code[%d], reason[%s], url[%s]",msg->status_code,msg->reason_phrase,url);
+	DA_SECURE_LOGI("status_code[%d], reason[%s], url[%s]",msg->status_code,msg->reason_phrase,url);
 
 	if (url) {
 		free(url);
@@ -921,7 +920,7 @@ void _pi_http_restarted_cb(SoupMessage *msg, gpointer data)
 
 void _pi_http_gotheaders_cb(SoupMessage *msg, gpointer data)
 {
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!msg) {
 		DA_LOG_ERR(HTTPManager, "Check NULL:msg");
@@ -945,7 +944,7 @@ void _pi_http_gotheaders_cb(SoupMessage *msg, gpointer data)
 	if (!using_content_sniffing)
 		_pi_http_store_read_header_to_queue(msg, NULL);
 	else
-		DA_LOG(HTTPManager,"ignore because content sniffing is turned on");
+		DA_LOG_DEBUG(HTTPManager,"ignore because content sniffing is turned on");
 }
 
 void _pi_http_contentsniffed_cb(SoupMessage *msg, const char *sniffedType,

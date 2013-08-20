@@ -84,7 +84,7 @@ da_result_t init_http_mgr(void)
 {
 	da_result_t ret = DA_RESULT_OK;
 
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (http_mgr.is_http_init == DA_FALSE) {
 		http_mgr.is_http_init = DA_TRUE;
@@ -122,7 +122,7 @@ ERR:
 
 void deinit_http_mgr(void)
 {
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (http_mgr.is_http_init == DA_TRUE) {
 		http_mgr.is_http_init = DA_FALSE;
@@ -211,7 +211,8 @@ da_result_t request_http_download(stage_info *stage)
 	} while (need_wait == DA_TRUE);
 
 	ret = GET_REQUEST_HTTP_RESULT(req_info);
-	DA_LOG(HTTPManager, "--------------Exiting request_http_download! ret = %d", ret);
+	DA_LOG_DEBUG(HTTPManager, "Exit request_http_download! ret[%d]slot_id[%d]",
+			ret, slot_id);
 	return ret;
 }
 
@@ -351,7 +352,7 @@ da_result_t make_default_http_request_hdr(const char *url,
 	http_msg_request_t *http_msg_request = NULL;
 	char *user_agent = NULL;
 
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	if (!url) {
 		DA_LOG_ERR(HTTPManager, "DA_ERR_NO_URL");
@@ -485,7 +486,7 @@ da_result_t make_transaction_info_and_start_transaction(stage_info *stage)
 
 	input_for_tranx_t *input_for_tranx = DA_NULL;
 
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	slot_id = GET_STAGE_DL_ID(stage);
 
@@ -849,7 +850,7 @@ da_result_t handle_any_input(stage_info *stage)
 
 	Q_pop_event(queue, &event);
 	if (event == DA_NULL) {
-		DA_LOG(HTTPManager, "There is no data on the queue!");
+		DA_LOG_DEBUG(HTTPManager, "There is no data on the queue!");
 		return DA_RESULT_OK;
 	}
 
@@ -981,7 +982,7 @@ da_result_t handle_event_http_final(stage_info *stage, q_event_t *event)
 	q_event_data_http_t *received_data = DA_NULL;
 
 
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	slot_id = GET_STAGE_DL_ID(stage);
 	_disconnect_transaction(stage);
@@ -1012,7 +1013,7 @@ da_result_t handle_event_http_final(stage_info *stage, q_event_t *event)
 		break;
 
 	case HTTP_STATE_DOWNLOADING:
-		DA_LOG(HTTPManager, "case HTTP_STATE_DOWNLOADING");
+		DA_LOG_VERBOSE(HTTPManager, "case HTTP_STATE_DOWNLOADING");
 		ret = file_write_complete(stage);
 		if (ret != DA_RESULT_OK) {
 			discard_download(stage);
@@ -1146,7 +1147,7 @@ da_result_t handle_http_hdr(stage_info *stage,
 
 	_da_thread_mutex_lock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(stage)));
 	http_state = GET_HTTP_STATE_ON_STAGE(stage);
-	DA_LOG(HTTPManager, "http_state = %d", http_state);
+	DA_LOG_DEBUG(HTTPManager, "http_state = %d", http_state);
 	_da_thread_mutex_unlock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(stage)));
 
 	switch (http_state) {
@@ -1192,7 +1193,7 @@ da_result_t handle_http_status_code(stage_info *stage,
 
 	_da_thread_mutex_lock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(stage)));
 	http_state = GET_HTTP_STATE_ON_STAGE(stage);
-	DA_LOG(HTTPManager, "http_state = %d", http_state);
+	DA_LOG_VERBOSE(HTTPManager, "http_state = %d", http_state);
 	_da_thread_mutex_unlock(&(GET_REQUEST_HTTP_MUTEX_HTTP_STATE(stage)));
 
 	store_http_status(slot_id, http_status);
@@ -1437,7 +1438,6 @@ da_result_t set_hdr_fields_on_download_info(stage_info *stage)
 	if (b_ret) {
 		GET_REQUEST_HTTP_HDR_CONT_LEN(request_info) = size;
 		size = 0;
-		DA_SECURE_LOGD("[Content-Length][%llu] - stored", GET_REQUEST_HTTP_HDR_CONT_LEN(request_info));
 	}
 
 	b_ret = http_msg_response_get_ETag(http_msg_response, &value);
@@ -1458,7 +1458,7 @@ da_result_t _check_content_type_is_matched(stage_info *stage)
 	source_info_t *source_info = DA_NULL;
 	char *content_type_from_server = DA_NULL;
 
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	request_info = GET_STAGE_TRANSACTION_INFO(stage);
 	source_info = GET_STAGE_SOURCE_INFO(stage);
@@ -1481,7 +1481,7 @@ da_result_t _check_enough_memory_for_this_download(stage_info *stage)
 	unsigned long long cont_len = 0;
 	da_storage_size_t memory;
 
-	DA_LOG_FUNC_LOGD(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	memset(&memory, 0x00, sizeof(da_storage_size_t));
 	request_info = GET_STAGE_TRANSACTION_INFO(stage);

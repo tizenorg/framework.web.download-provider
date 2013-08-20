@@ -36,7 +36,7 @@ da_result_t init_download_mgr() {
 	da_result_t ret = DA_RESULT_OK;
 	int i = 0;
 
-	DA_LOG_FUNC_LOGD(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	_da_thread_mutex_lock(&mutex_download_mgr);
 
@@ -58,7 +58,7 @@ da_result_t init_download_mgr() {
 da_result_t deinit_download_mgr(void) {
 	da_result_t ret = DA_RESULT_OK;
 
-	DA_LOG_FUNC_LOGD(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	_da_thread_mutex_lock(&mutex_download_mgr);
 	if (download_mgr.is_init == DA_TRUE) {
@@ -118,7 +118,7 @@ void destroy_download_info(int slot_id)
 {
 	dl_info_t *dl_info = DA_NULL;
 
-	DA_LOG(Default, "Destroying slot_id [%d] Info", slot_id);
+	DA_LOG_VERBOSE(Default, "Destroying slot_id [%d] Info", slot_id);
 
 	if (slot_id == DA_INVALID_ID) {
 		DA_LOG_ERR(Default, "invalid slot_id");
@@ -167,7 +167,7 @@ void destroy_download_info(int slot_id)
 
 	dl_info->is_using = DA_FALSE;
 
-	DA_LOG(Default, "Destroying slot_id [%d] Info END", slot_id);
+	DA_LOG_DEBUG(Default, "Destroying slot_id [%d] Info END", slot_id);
 	_da_thread_mutex_unlock (&mutex_download_state[slot_id]);
 	return;
 }
@@ -268,7 +268,7 @@ void cleanup_source_info_basic_download(source_info_basic_t *source_info_basic)
 	if (NULL == source_info_basic)
 		goto ERR;
 
-	DA_LOG_FUNC_LOGD(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (NULL != source_info_basic->url) {
 		free(source_info_basic->url);
@@ -282,7 +282,7 @@ ERR:
 
 void cleanup_req_dl_info_http(req_dl_info *http_download)
 {
-	DA_LOG_FUNC_LOGD(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (http_download->http_info.http_msg_request) {
 		http_msg_request_destroy(
@@ -350,7 +350,7 @@ void destroy_file_info(file_info *file_information)
 
 void clean_up_client_input_info(client_input_t *client_input)
 {
-	DA_LOG_FUNC_LOGD(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (client_input) {
 		client_input->user_data = NULL;

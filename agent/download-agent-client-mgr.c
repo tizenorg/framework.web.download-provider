@@ -36,7 +36,7 @@ void destroy_client_noti(client_noti_t *client_noti);
 
 da_result_t init_client_app_mgr()
 {
-	DA_LOG_FUNC_LOGD(ClientNoti);
+	DA_LOG_FUNC_LOGV(ClientNoti);
 
 	if(client_app_mgr.is_init)
 		return DA_RESULT_OK;
@@ -90,7 +90,7 @@ da_result_t dereg_client_app(void)
 {
 	client_noti_t *client_noti = DA_NULL;
 
-	DA_LOG_FUNC_LOGD(ClientNoti);
+	DA_LOG_FUNC_LOGV(ClientNoti);
 
 	client_noti = (client_noti_t *)calloc(1, sizeof(client_noti_t));
 	if (!client_noti) {
@@ -115,13 +115,13 @@ da_result_t dereg_client_app(void)
 		void *t_return = NULL;
 		DA_LOG_VERBOSE(ClientNoti, "pushing Q_CLIENT_NOTI_TYPE_TERMINATE");
 		push_client_noti(client_noti);
-		DA_LOG_CRITICAL(Thread, "===try to join client mgr thread id[%lu]===",
+		DA_LOG_DEBUG(Thread, "===try to join client mgr thread id[%lu]===",
 				client_app_mgr.thread_id);
 		if (client_app_mgr.thread_id &&
 				pthread_join(client_app_mgr.thread_id, &t_return) < 0) {
 			DA_LOG_ERR(Thread, "join client thread is failed!!!");
 		}
-		DA_LOG_CRITICAL(Thread, "===thread join return[%d]===", (char*)t_return);
+		DA_LOG_DEBUG(Thread, "===thread join return[%d]===", (char*)t_return);
 	}
 	_da_thread_mutex_unlock(&(client_app_mgr.mutex_client_mgr));
 
@@ -275,8 +275,7 @@ da_result_t  send_client_update_dl_info (
 
 	if (etag)
 		update_dl_info->etag = strdup(etag);
-	DA_LOG(ClientNoti, "pushing slot_id=%d, dl_id=%d", slot_id, dl_id);
-	DA_SECURE_LOGD("pushing file_size=%lu", file_size);
+	DA_LOG_DEBUG(ClientNoti, "pushing slot_id=%d, dl_id=%d", slot_id, dl_id);
 
 	push_client_noti(client_noti);
 
@@ -327,7 +326,7 @@ da_result_t  send_client_finished_info (
 		DA_SECURE_LOGD("pushing finished info. etag[%s]", etag);
 	}
 	DA_LOG_VERBOSE(ClientNoti, "user_data=%p", client_noti->user_data);
-	DA_LOG(ClientNoti, "http_status=%d", http_status);
+	DA_LOG_VERBOSE(ClientNoti, "http_status=%d", http_status);
 	DA_LOG(ClientNoti, "pushing slot_id=%d, dl_id=%d err=%d", slot_id, dl_id, error);
 
 	push_client_noti(client_noti);
@@ -571,9 +570,9 @@ static void *__thread_for_client_noti(void *data)
 								finished_info->err,
 								finished_info->http_status,
 								client_noti->user_data);
-						DA_SECURE_LOGD("Completed info for saved_path=%s etag=%s - DONE",
-								finished_info->saved_path,
-								finished_info->etag);
+						if (finished_info->etag)
+							DA_SECURE_LOGD("Completed info for etag=%s - DONE",
+									finished_info->etag);
 
 					}
 				}
@@ -593,7 +592,7 @@ static void *__thread_for_client_noti(void *data)
 				}
 				break;
 				case Q_CLIENT_NOTI_TYPE_TERMINATE:
-					DA_LOG_CRITICAL(ClientNoti, "Q_CLIENT_NOTI_TYPE_TERMINATE");
+					DA_LOG_VERBOSE(ClientNoti, "Q_CLIENT_NOTI_TYPE_TERMINATE");
 					need_wait = DA_FALSE;
 					break;
 				}
@@ -618,7 +617,7 @@ static void *__thread_for_client_noti(void *data)
 	_da_thread_cond_destroy(&(queue->cond_client_queue));
 
 	pthread_cleanup_pop(0);
-	DA_LOG_CRITICAL(Thread, "=====thread_for_client_noti- EXIT=====");
+	DA_LOG_DEBUG(Thread, "=====thread_for_client_noti- EXIT=====");
 	pthread_exit((void *)NULL);
 	return DA_NULL;
 }

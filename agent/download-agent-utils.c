@@ -168,7 +168,7 @@ da_result_t get_available_memory(da_storage_size_t *avail_memory)
 
 	DA_LOG_VERBOSE(Default, "Available Memory(f_bavail) : %llu", filesys_info.f_bavail);
 	DA_LOG_VERBOSE(Default, "Available Memory(f_bsize) : %d", filesys_info.f_bsize);
-	DA_LOG(Default, "Available Memory(kbytes) : %lu", (filesys_info.f_bavail/1024)*filesys_info.f_bsize);
+	DA_LOG_VERBOSE(Default, "Available Memory(kbytes) : %lu", (filesys_info.f_bavail/1024)*filesys_info.f_bsize);
 
 	free(default_install_dir);
 	return DA_RESULT_OK;

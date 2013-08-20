@@ -188,7 +188,6 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 	else
 		temp++;
 
-	DA_SECURE_LOGD("final extension name:[%s]",temp);
 	*ext = (char*)calloc(1, strlen(temp) + 1);
 	if (*ext != DA_NULL) {
 		strncpy(*ext, temp,strlen(temp));
@@ -259,7 +258,7 @@ da_bool_t da_get_file_name_from_url(char *url, char **name)
 	int len_name = 0;
 	char name_buff[DA_MAX_FILE_PATH_LEN] = {0,};
 
-	DA_LOG_FUNC_LOGD(Default);
+	DA_LOG_FUNC_LOGV(Default);
 
 	if (DA_NULL == url || DA_NULL == name) {
 		ret = DA_FALSE;

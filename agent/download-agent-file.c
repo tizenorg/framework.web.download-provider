@@ -133,7 +133,7 @@ da_result_t get_mime_type(stage_info *stage, char **out_mime_type)
 		return DA_ERR_FAIL_TO_MEMALLOC;
 	}
 
-	DA_SECURE_LOGD("mime type = %s", *out_mime_type);
+//	DA_SECURE_LOGD("mime type = %s", *out_mime_type);
 	return DA_RESULT_OK;
 }
 
@@ -217,14 +217,13 @@ da_result_t __saved_file_open(stage_info *stage)
 	char *actual_file_path = DA_NULL;
 	void *fd = DA_NULL;
 
-	DA_LOG_FUNC_LOGD(FileManager);
+	DA_LOG_FUNC_LOGV(FileManager);
 
 	file_storage = GET_STAGE_CONTENT_STORE_INFO(stage);
 	if (!file_storage)
 		return DA_ERR_INVALID_ARGUMENT;
 
 	actual_file_path = GET_CONTENT_STORE_ACTUAL_FILE_NAME(file_storage);
-	DA_SECURE_LOGD("actual_file_path = %s", actual_file_path);
 	if (!actual_file_path)
 		return DA_ERR_INVALID_ARGUMENT;
 
@@ -357,7 +356,7 @@ da_result_t __get_candidate_file_name(stage_info *stage, char **out_pure_file_na
 	char *pure_file_name = DA_NULL;
 	char *extension = DA_NULL;
 
-	DA_LOG_FUNC_LOGD(FileManager);
+	DA_LOG_FUNC_LOGV(FileManager);
 
 	if (!stage || !out_pure_file_name)
 		return DA_ERR_INVALID_ARGUMENT;
@@ -454,7 +453,7 @@ da_result_t __decide_file_path(stage_info *stage)
 	char *user_install_path = DA_NULL;
 	file_info *file_info_data = DA_NULL;
 	int len = 0;
-	DA_LOG_FUNC_LOGD(FileManager);
+	DA_LOG_FUNC_LOGV(FileManager);
 
 	file_info_data = GET_STAGE_CONTENT_STORE_INFO(stage);
 	if (!file_info_data)
@@ -508,7 +507,7 @@ da_result_t __decide_file_path(stage_info *stage)
 	}
 
 ERR:
-	DA_SECURE_LOGD("decided file path = %s", GET_CONTENT_STORE_ACTUAL_FILE_NAME(file_info_data));
+	DA_SECURE_LOGI("decided file path = %s", GET_CONTENT_STORE_ACTUAL_FILE_NAME(file_info_data));
 	if (temp_dir) {
 		free(temp_dir);
 		temp_dir = DA_NULL;
@@ -865,7 +864,7 @@ da_result_t file_write_complete(stage_info *stage)
 	unsigned int buffer_size = 0;
 	void *fd = DA_NULL;
 
-	DA_LOG_FUNC_LOGD(FileManager);
+	DA_LOG_FUNC_LOGV(FileManager);
 
 	file_storage = GET_STAGE_CONTENT_STORE_INFO(stage);
 	if (!file_storage) {
@@ -903,7 +902,7 @@ da_result_t start_file_writing(stage_info *stage)
 	da_result_t ret = DA_RESULT_OK;
 	file_info *file_info_data = DA_NULL;
 
-	DA_LOG_FUNC_LOGD(FileManager);
+	DA_LOG_FUNC_LOGV(FileManager);
 
 	file_info_data = GET_STAGE_CONTENT_STORE_INFO(stage);
 	ret = get_mime_type(stage,
