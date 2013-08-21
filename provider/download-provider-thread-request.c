@@ -285,35 +285,6 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 		request->state_cb = 0;
 		request->progress_cb = 0;
 
-		// care started requests (queued, connecting, downloading)
-		int auto_download = dp_db_get_int_column(request->id,
-				DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_AUTO_DOWNLOAD);
-		if (auto_download <= 0) {
-			// cancel the requests which not setted auto-downloading
-			TRACE_INFO("[CLEAR][%d] no-auto state:%s",
-				request->id, dp_print_state(request->state));
-
-			if (dp_db_request_update_status(request->id, state,
-					errorcode) < 0) {
-				TRACE_ERROR("[fail][%d][sql] set state:%s error:%s",
-					request->id, dp_print_state(state),
-					dp_print_errorcode(errorcode));
-			} else {
-				// regardless errorcode, if success to update the state.
-				if (request->agent_id >= 0) {
-					TRACE_INFO("[%d]cancel_agent(%d) state:%s error:%s",
-						request->id, request->agent_id,
-						dp_print_state(state),
-						dp_print_errorcode(errorcode));
-					if (dp_cancel_agent_download(request->agent_id) < 0)
-						TRACE_ERROR("[fail][%d]cancel_agent", request->id);
-				}
-				CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
-				dp_request_slot_free(&privates->requests[i]);
-				continue;
-			}
-		}
->>>>>>> 1c705e5... the speed improvement of logging to SQL
 		CLIENT_MUTEX_UNLOCK(&privates->requests[i].mutex);
 
 	}
@@ -1535,8 +1506,8 @@ void *dp_thread_requests_manager(void *arg)
 			break;
 		}
 
-		if (privates == NULL) {
-			TRACE_INFO("Terminate Thread");
+		if (privates == NULL || privates->listen_fd < 0) {
+			TRACE_DEBUG("Terminate Thread");
 			break;
 		}
 
