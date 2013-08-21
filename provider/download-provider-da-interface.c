@@ -339,6 +339,65 @@ static dp_error_type __set_dir_smack_label(char *smack_label, char *dir_path, ch
 	return errorcode;
 }
 
+static dp_error_type __set_file_permission_to_client(dp_request *request, char *saved_path)
+{
+	dp_error_type errorcode = DP_ERROR_NONE;
+	char *str = NULL;
+	char *smack_label = NULL;
+	str = strrchr(saved_path, '/');
+	dp_credential cred;
+	if (request->group == NULL) {
+		cred.uid = dp_db_cond_get_int(DP_DB_TABLE_GROUPS,
+					DP_DB_GROUPS_COL_UID,
+					DP_DB_GROUPS_COL_PKG,
+					DP_DB_COL_TYPE_TEXT, request->packagename);
+		cred.gid = dp_db_cond_get_int(DP_DB_TABLE_GROUPS,
+					DP_DB_GROUPS_COL_GID,
+					DP_DB_GROUPS_COL_PKG,
+					DP_DB_COL_TYPE_TEXT, request->packagename);
+	} else {
+		cred = request->group->credential;
+	}
+	TRACE_DEBUG
+		("[chown][%d] [%d][%d]", request->id, cred.uid, cred.gid);
+	if (chown(saved_path, cred.uid, cred.gid) < 0)
+		TRACE_STRERROR("[ERROR][%d] chown", request->id);
+	if (chmod(saved_path,
+			S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) < 0)
+		TRACE_STRERROR("[ERROR][%d] chmod", request->id);
+	if (dp_is_smackfs_mounted() == 1) {
+		if (request->group == NULL) {
+			// get smack_label from sql
+			smack_label =
+				dp_db_cond_get_text(DP_DB_TABLE_GROUPS,
+					DP_DB_GROUPS_COL_SMACK_LABEL,
+					DP_DB_GROUPS_COL_PKG,
+					DP_DB_COL_TYPE_TEXT, request->packagename);
+		} else {
+			smack_label = dp_strdup(request->group->smack_label);
+		}
+		if (smack_label == NULL) {
+			TRACE_SECURE_ERROR("[SMACK][%d] no label", request->id);
+			errorcode = DP_ERROR_PERMISSION_DENIED;
+		} else {
+			size_t len = str - (saved_path);
+			char *dir_path = (char *)calloc(len + 1, sizeof(char));
+			if (dir_path != NULL) {
+				strncpy(dir_path, saved_path, len);
+				errorcode =
+					__set_dir_smack_label(smack_label, dir_path,
+						saved_path);
+				free(dir_path);
+			} else {
+				TRACE_SECURE_ERROR("[ERROR] calloc");
+				errorcode = DP_ERROR_OUT_OF_MEMORY;
+			}
+			free(smack_label);
+		}
+	}
+	return errorcode;
+}
+
 static void __finished_cb(user_finished_info_t *info, void *user_data)
 {
 	if (!info) {
@@ -386,63 +445,13 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 		char *content_name = NULL;
 		if (info->saved_path != NULL) {
 			char *str = NULL;
-			char *smack_label = NULL;
+			errorcode = __set_file_permission_to_client(request, info->saved_path);
 			str = strrchr(info->saved_path, '/');
 			if (str != NULL) {
 				str++;
 				content_name = dp_strdup(str);
 				TRACE_SECURE_INFO("[PARSE][%d] content_name [%s]",
 					request_id, content_name);
-			}
-			dp_credential cred;
-			if (request->group == NULL) {
-				cred.uid = dp_db_cond_get_int(DP_DB_TABLE_GROUPS,
-							DP_DB_GROUPS_COL_UID,
-							DP_DB_GROUPS_COL_PKG,
-							DP_DB_COL_TYPE_TEXT, request->packagename);
-				cred.gid = dp_db_cond_get_int(DP_DB_TABLE_GROUPS,
-							DP_DB_GROUPS_COL_GID,
-							DP_DB_GROUPS_COL_PKG,
-							DP_DB_COL_TYPE_TEXT, request->packagename);
-			} else {
-				cred = request->group->credential;
-			}
-			TRACE_INFO
-				("[chown][%d] [%d][%d]", request_id, cred.uid, cred.gid);
-			if (chown(info->saved_path, cred.uid, cred.gid) < 0)
-				TRACE_STRERROR("[ERROR][%d] chown", request_id);
-			if (chmod(info->saved_path,
-					S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) < 0)
-				TRACE_STRERROR("[ERROR][%d] chmod", request_id);
-			if (dp_is_smackfs_mounted() == 1) {
-				if (request->group == NULL) {
-					// get smack_label from sql
-					smack_label =
-						dp_db_cond_get_text(DP_DB_TABLE_GROUPS,
-							DP_DB_GROUPS_COL_SMACK_LABEL,
-							DP_DB_GROUPS_COL_PKG,
-							DP_DB_COL_TYPE_TEXT, request->packagename);
-				} else {
-					smack_label = dp_strdup(request->group->smack_label);
-				}
-				if (smack_label == NULL) {
-					TRACE_SECURE_ERROR("[SMACK][%d] no label", request_id);
-					errorcode = DP_ERROR_PERMISSION_DENIED;
-				} else {
-					size_t len = str - (info->saved_path) -1;
-					char *dir_path = (char *)calloc(len + 1, sizeof(char));
-					if (dir_path != NULL) {
-						strncpy(dir_path, info->saved_path, len);
-						errorcode =
-							__set_dir_smack_label(smack_label, dir_path,
-								info->saved_path);
-						free(dir_path);
-					} else {
-						TRACE_SECURE_ERROR("[ERROR] calloc");
-						errorcode = DP_ERROR_OUT_OF_MEMORY;
-					}
-					free(smack_label);
-				}
 			}
 
 			conds_p[conds_index].column = DP_DB_COL_SAVED_PATH;
@@ -507,18 +516,29 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 				}
 			}
 		}
-
 		free(content_name);
-
-	} else if (info->err == DA_RESULT_USER_CANCELED) {
-		state = DP_STATE_CANCELED;
-		errorcode = request->error;
-		TRACE_INFO("[CANCELED][%d]", request_id);
 	} else {
-		state = DP_STATE_FAILED;
-		errorcode = __change_error(info->err);
-		TRACE_INFO("[FAILED][%d][%s]", request_id,
-				dp_print_errorcode(errorcode));
+		char *tmp_saved_path =
+			dp_request_get_tmpsavedpath(request_id, request, &errorcode);
+
+		if (tmp_saved_path != NULL) {
+			errorcode = __set_file_permission_to_client(request, tmp_saved_path);
+			free(tmp_saved_path);
+		} else {
+			TRACE_ERROR("Cannot enter here");
+			TRACE_ERROR("[ERROR][%d] No SavedPath", request_id);
+		}
+
+		if (info->err == DA_RESULT_USER_CANCELED) {
+			state = DP_STATE_CANCELED;
+			errorcode = request->error;
+			TRACE_INFO("[CANCELED][%d]", request_id);
+		} else {
+			state = DP_STATE_FAILED;
+			errorcode = __change_error(info->err);
+			TRACE_INFO("[FAILED][%d][%s]", request_id,
+					dp_print_errorcode(errorcode));
+		}
 	}
 
 	request->state = state;
