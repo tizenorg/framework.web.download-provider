@@ -1020,13 +1020,15 @@ da_result_t handle_event_http_final(stage_info *stage, q_event_t *event)
 			discard_download(stage);
 			goto ERR;
 		}
-		/*			ret = _check_downloaded_file_size_is_same_with_header_content_size(stage);
-		 if(ret != DA_RESULT_OK)
-		 {
-		 discard_download(stage) ;
-		 goto ERR;
-		 }
+		/* Sometimes, the server can send "0" byte package data although whole data are not sent.
+		 * At that case, the libsoup call finished callback function with 200 Ok.
+		 * Only if the DA know content size form response header, it can check the error or not
 		 */
+		ret = _check_downloaded_file_size_is_same_with_header_content_size(stage);
+		if(ret != DA_RESULT_OK) {
+			discard_download(stage) ;
+			goto ERR;
+		}
 		CHANGE_HTTP_STATE(HTTP_STATE_DOWNLOAD_FINISH, stage);
 		send_client_update_progress_info(
 				slot_id,
