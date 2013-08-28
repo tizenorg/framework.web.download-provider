@@ -1779,6 +1779,10 @@ void *dp_thread_requests_manager(void *arg)
 				prev_timeout, now_timeout, flexible_timeout);
 			if (prev_timeout == 0) {
 				prev_timeout = now_timeout;
+			} else if (now_timeout < prev_timeout ||
+				(now_timeout - prev_timeout) > flexible_timeout) {
+				TRACE_ERROR("[WARN] check system date prev[%ld]now[%ld]",
+					prev_timeout, now_timeout);
 			} else {
 				if ((now_timeout - prev_timeout) <
 						DP_CARE_CLIENT_MIN_INTERVAL) {

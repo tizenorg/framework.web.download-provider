@@ -128,6 +128,8 @@ char *dp_print_errorcode(dp_error_type errorcode)
 			return "UNHANDLED_HTTP_CODE";
 		case DP_ERROR_CANNOT_RESUME :
 			return "CANNOT_RESUME";
+		case DP_ERROR_PERMISSION_DENIED :
+			return "PERMISSION_DENIED";
 		case DP_ERROR_RESPONSE_TIMEOUT :
 			return "RESPONSE_TIMEOUT";
 		case DP_ERROR_REQUEST_TIMEOUT :
