@@ -1359,6 +1359,8 @@ static dp_error_type __do_dp_start_command(int sock, int id, dp_privates *privat
 						DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_STATE_EVENT);
 				tmp_request->progress_cb = dp_db_get_int_column(id,
 						DP_DB_TABLE_REQUEST_INFO, DP_DB_COL_PROGRESS_EVENT);
+				if (group != NULL) // for send event to client
+					tmp_request->group = group;
 				privates->requests[index].request = tmp_request;
 				request = privates->requests[index].request;
 			} else {
