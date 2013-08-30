@@ -1944,7 +1944,9 @@ void *dp_thread_requests_manager(void *arg)
 				}
 			}
 			prev_timeout = now_timeout;
-		} // timeout
+		} else {
+			prev_timeout = 0;
+		}
 	}
 	TRACE_INFO("terminate main thread ...");
 	dp_terminate(SIGTERM);
