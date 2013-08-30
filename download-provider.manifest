@@ -11,6 +11,8 @@
 			<smack request="device::sys_logging" type="w" />
 			<smack request="system::media" type="arwxt" />
 			<smack request="system::ext_media" type="arwxt" />
+			<smack request="connman" type="rw" />
+			<smack request="net-config" type="rw" />
 		</request>
 		<permit>
 			<smack permit="com.samsung.indicator" type="rx" />
