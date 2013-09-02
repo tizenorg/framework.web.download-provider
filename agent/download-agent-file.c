@@ -18,7 +18,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <math.h>
-
+#include <errno.h>
 #include "download-agent-client-mgr.h"
 #include "download-agent-debug.h"
 #include "download-agent-utils.h"
@@ -231,7 +231,10 @@ da_result_t __saved_file_open(stage_info *stage)
 	fd = fopen(actual_file_path, "a+"); // for resume
 	if (fd == DA_NULL) {
 		DA_LOG_ERR(FileManager, "File open failed");
-		ret = DA_ERR_FAIL_TO_ACCESS_FILE;
+		if (errno == ENOSPC)
+			ret = DA_ERR_DISK_FULL;
+		else
+			ret = DA_ERR_FAIL_TO_ACCESS_FILE;
 		goto ERR;
 	}
 	GET_CONTENT_STORE_FILE_HANDLE(file_storage) = fd;
@@ -712,7 +715,10 @@ da_result_t __file_write_buf_flush_buf(stage_info *stage, file_info *file_storag
 	//fflush((FILE *) fd);
 	if (write_success_len != buffer_size) {
 		DA_LOG_ERR(FileManager, "write  fails ");
-		ret = DA_ERR_FAIL_TO_ACCESS_FILE;
+		if (errno == ENOSPC)
+			ret = DA_ERR_DISK_FULL;
+		else
+			ret = DA_ERR_FAIL_TO_ACCESS_FILE;
 		goto ERR;
 	}
 	GET_CONTENT_STORE_CURRENT_FILE_SIZE(GET_STAGE_CONTENT_STORE_INFO(stage))
@@ -766,7 +772,10 @@ da_result_t __file_write_buf_directly_write(stage_info *stage,
 	//fflush((FILE *) fd);
 	if (write_success_len != body_len) {
 		DA_LOG_ERR(FileManager, "write  fails ");
-		ret = DA_ERR_FAIL_TO_ACCESS_FILE;
+		if (errno == ENOSPC)
+			ret = DA_ERR_DISK_FULL;
+		else
+			ret = DA_ERR_FAIL_TO_ACCESS_FILE;
 		goto ERR;
 	}
 	GET_CONTENT_STORE_CURRENT_FILE_SIZE(GET_STAGE_CONTENT_STORE_INFO(stage))
