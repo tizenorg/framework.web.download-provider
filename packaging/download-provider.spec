@@ -172,6 +172,7 @@ chmod 660 /opt/usr/dbspace/.download-provider.db-journal
 %dir /opt/data/%{name}
 %manifest download-provider.manifest
 %{_imagedir}/*.png
+%{_imagedir}/*.gif
 %{_localedir}/*
 %{_libdir}/libdownloadagent2.so.0.0.1
 %{_libdir}/libdownloadagent2.so

@@ -33,6 +33,8 @@
 #define __(s) dgettext(PKG_NAME, s)
 
 #define DP_NOTIFICATION_ICON_PATH IMAGE_DIR"/Q02_Notification_Download_failed.png"
+#define DP_NOTIFICATION_ONGOING_ICON_PATH IMAGE_DIR"/Notification_download_animation.gif"
+#define DP_NOTIFICATION_DOWNLOADING_ICON_PATH "reserved://indicator/ani/downloading"
 
 static const char *__noti_error_str(
 		notification_error_e err)
@@ -141,7 +143,7 @@ static char *__get_string_status(dp_state_type state)
 	char *message = NULL;
 	switch (state) {
 	case DP_STATE_COMPLETED:
-		message = __("IDS_RH_POP_DOWNLOAD_COMPLETE");
+		message = __("IDS_DM_HEADER_DOWNLOAD_COMPLETE");
 		break;
 	case DP_STATE_CANCELED:
 	case DP_STATE_FAILED:
@@ -296,7 +298,7 @@ int dp_set_downloadinginfo_notification(int id, char *packagename)
 	}
 
 	err = notification_set_image(noti_handle,
-			NOTIFICATION_IMAGE_TYPE_ICON, DP_NOTIFICATION_ICON_PATH);
+			NOTIFICATION_IMAGE_TYPE_ICON, DP_NOTIFICATION_ONGOING_ICON_PATH);
 	if (err != NOTIFICATION_ERROR_NONE) {
 		TRACE_ERROR("[FAIL] set icon [%s]", __noti_error_str(err));
 		notification_free(noti_handle);
@@ -339,6 +341,21 @@ int dp_set_downloadinginfo_notification(int id, char *packagename)
 			NOTIFICATION_PROP_DISABLE_TICKERNOTI);
 	if (err != NOTIFICATION_ERROR_NONE) {
 		TRACE_ERROR("[FAIL] set property [%s]", __noti_error_str(err));
+		notification_free(noti_handle);
+		return -1;
+	}
+
+	err = notification_set_image(noti_handle,
+		NOTIFICATION_IMAGE_TYPE_ICON_FOR_INDICATOR, DP_NOTIFICATION_DOWNLOADING_ICON_PATH);
+	if (err != NOTIFICATION_ERROR_NONE) {
+		TRACE_ERROR("[FAIL] set icon indicator [%s]", __noti_error_str(err));
+		notification_free(noti_handle);
+		return -1;
+	}
+
+	err = notification_set_display_applist(noti_handle, NOTIFICATION_DISPLAY_APP_ALL);
+	if (err != NOTIFICATION_ERROR_NONE) {
+		TRACE_ERROR("[FAIL] set disable icon [%s]", __noti_error_str(err));
 		notification_free(noti_handle);
 		return -1;
 	}
@@ -545,6 +562,14 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 		return -1;
 	}
 
+	err = notification_set_display_applist(noti_handle,
+			NOTIFICATION_DISPLAY_APP_ALL ^ NOTIFICATION_DISPLAY_APP_INDICATOR);
+	if (err != NOTIFICATION_ERROR_NONE) {
+		TRACE_ERROR("[FAIL] set disable icon [%s]", __noti_error_str(err));
+		notification_free(noti_handle);
+		return -1;
+	}
+
 	err = notification_insert(noti_handle, &privId);
 	if (err != NOTIFICATION_ERROR_NONE) {
 		TRACE_ERROR("[FAIL] set insert [%s]", __noti_error_str(err));
@@ -567,7 +592,7 @@ void dp_update_downloadinginfo_notification(int priv_id, double received_size, d
 
 	if (file_size > 0) {
 		double progress;
-		progress = (double)received_size / (double)file_size;
+		progress = received_size / file_size;
 		err = notification_update_progress(NULL, priv_id, progress);
 		if (err != NOTIFICATION_ERROR_NONE)
 			TRACE_ERROR("[FAIL] update noti progress[%s]",
