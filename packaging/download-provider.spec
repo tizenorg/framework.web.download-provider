@@ -1,6 +1,6 @@
 Name:       download-provider
 Summary:    download the contents in background.
-Version:    1.0.8
+Version:    1.0.9
 Release:    0
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
@@ -201,6 +201,10 @@ chmod 660 /opt/usr/dbspace/.download-provider.db-journal
 %{_libdir}/pkgconfig/download-provider-interface.pc
 
 %changelog
+* Wed Sep 04 2013 Jungki Kwak <jungki.kwak@samsung.com>
+- Update downloading icon for ongoing notification
+- Changes for the registering downloading icon of Indicator
+
 * Mon Aug 05 2013 Jungki Kwak <jungki.kwak@samsung.com>
 - Change to ignore uppper case when parsing http response header
 - Change to permit the space at file name
