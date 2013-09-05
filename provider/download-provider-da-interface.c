@@ -218,7 +218,8 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 		TRACE_ERROR("[ERROR][%d][SQL]", request_id);
 	}
 
-	if (request->auto_notification)
+	int noti_type = dp_db_get_int_column(request_id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+	if(noti_type == DP_NOTIFICATION_TYPE_ALL || request->auto_notification)
 		request->noti_priv_id =
 			dp_set_downloadinginfo_notification
 				(request->id, request->packagename);
@@ -263,7 +264,8 @@ static void __progress_cb(user_progress_info_t *info, void *user_data)
 		// send event every 1 second.
 		if (request->progress_lasttime != localTime->tm_sec) {
 			request->progress_lasttime = localTime->tm_sec;
-			if (request->auto_notification)
+			int noti_type = dp_db_get_int_column(request->id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+			if(noti_type == DP_NOTIFICATION_TYPE_ALL || request->auto_notification)
 				dp_update_downloadinginfo_notification
 					(request->noti_priv_id,
 					(double)request->received_size,
@@ -549,7 +551,8 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 	}
 
 	// to prevent the crash . check packagename of request
-	if (request->auto_notification && request->packagename != NULL) {
+	int noti_type = dp_db_get_int_column(request_id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+	if (((noti_type != DP_NOTIFICATION_TYPE_NONE) || request->auto_notification) && (request->packagename != NULL)) {
 		request->noti_priv_id =
 			dp_set_downloadedinfo_notification(request->noti_priv_id,
 				request->id, request->packagename, request->state);

@@ -22,6 +22,7 @@
 #endif
 
 #include <tizen.h>
+#include <bundle.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -77,6 +78,19 @@ typedef enum
 	DOWNLOAD_ADAPTOR_ERROR_NO_DATA = TIZEN_ERROR_NO_DATA, /**< No data because the set API is not called */
 	DOWNLOAD_ADAPTOR_ERROR_IO_ERROR = TIZEN_ERROR_IO_ERROR , /**< Internal I/O error */
 } download_adaptor_error_e;
+
+typedef enum {
+	DOWNLOAD_ADAPTOR_NOTIFICATION_TYPE_NONE = 0, // Not register Noti.
+	DOWNLOAD_ADAPTOR_NOTIFICATION_TYPE_COMPLETE_ONLY, // Success, Failed
+	DOWNLOAD_ADAPTOR_NOTIFICATION_TYPE_ALL // Ongoing, Success, Failed
+} download_adaptor_notification_type;
+
+typedef enum {
+	DOWNLOAD_ADAPTOR_NOTIFICATION_BUNDLE_TYPE_ONGOING = 0, // Ongoing, Failed
+	DOWNLOAD_ADAPTOR_NOTIFICATION_BUNDLE_TYPE_COMPLETE, // Completed
+	DOWNLOAD_ADAPTOR_NOTIFICATION_BUNDLE_TYPE_FAILED, // Failed
+} download_adaptor_notification_bundle_type;
+
 // sync with url-download
 
 
@@ -131,6 +145,14 @@ EXPORT_API int dp_interface_add_noti_extra(const int id, const char *key, const 
 EXPORT_API int dp_interface_get_noti_extra_values(const int id, const char *key, char ***values, unsigned *length);
 EXPORT_API int dp_interface_remove_noti_extra_key(const int id, const char *key);
 
+EXPORT_API int dp_interface_set_notification_bundle(const int id, int type, bundle *b);
+EXPORT_API int dp_interface_get_notification_bundle(const int id, int type, bundle **b);
+EXPORT_API int dp_interface_set_notification_title(const int id, const char *title);
+EXPORT_API int dp_interface_get_notification_title(const int id, char **title);
+EXPORT_API int dp_interface_set_notification_description(const int id, const char *description);
+EXPORT_API int dp_interface_get_notification_description(const int id, char **description);
+EXPORT_API int dp_interface_set_notification_type(const int id, int type);
+EXPORT_API int dp_interface_get_notification_type(const int id, int *type);
 #ifdef __cplusplus
 }
 #endif

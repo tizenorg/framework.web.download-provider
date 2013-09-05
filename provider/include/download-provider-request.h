@@ -18,6 +18,7 @@
 #define DOWNLOAD_PROVIDER2_REQUEST_H
 
 #include "download-provider.h"
+#include <bundle.h>
 
 // for Debugging
 char *dp_print_state(dp_state_type state);
@@ -30,6 +31,10 @@ dp_error_type dp_request_create(int id, dp_client_group *group, dp_request** emp
 dp_error_type dp_request_set_url(int id, dp_request *request, char *url);
 dp_error_type dp_request_set_destination(int id, dp_request *request, char *dest);
 dp_error_type dp_request_set_filename(int id, dp_request *request, char *filename);
+dp_error_type dp_request_set_title(int id, dp_request *request, char *filename);
+dp_error_type dp_request_set_bundle(int id, dp_request *request, int type, bundle_raw *b, unsigned length);
+dp_error_type dp_request_set_description(int id, dp_request *request, char *description);
+dp_error_type dp_request_set_noti_type(int id, dp_request *request, unsigned type);
 dp_error_type dp_request_set_notification(int id, dp_request *request, unsigned enable);
 dp_error_type dp_request_set_auto_download(int id, dp_request *request, unsigned enable);
 dp_error_type dp_request_set_state_event(int id, dp_request *request, unsigned enable);
@@ -38,6 +43,10 @@ dp_error_type dp_request_set_network_type(int id, dp_request *request, int type)
 char *dp_request_get_url(int id, dp_error_type *errorcode);
 char *dp_request_get_destination(int id, dp_request *request, dp_error_type *errorcode);
 char *dp_request_get_filename(int id, dp_request *request, dp_error_type *errorcode);
+char *dp_request_get_title(int id, dp_request *request, dp_error_type *errorcode);
+bundle_raw *dp_request_get_bundle(int id, dp_request *request, dp_error_type *errorcode, char* column, int* length);
+char *dp_request_get_description(int id, dp_request *request, dp_error_type *errorcode);
+int dp_request_get_noti_type(int id, dp_request *request, dp_error_type *errorcode);
 char *dp_request_get_contentname(int id, dp_request *request, dp_error_type *errorcode);
 char *dp_request_get_etag(int id, dp_request *request, dp_error_type *errorcode);
 char *dp_request_get_savedpath(int id, dp_request *request, dp_error_type *errorcode);

@@ -81,6 +81,12 @@ CREATE TABLE IF NOT EXISTS notification
 id INTEGER NOT NULL,
 extra_key TEXT DEFAULT NULL,
 extra_data TEXT DEFAULT NULL,
+raw_bundle_data_complete_state BLOB DEFAULT NULL,
+raw_bundle_data_fail_state BLOB DEFAULT NULL,
+raw_bundle_data_ongoing_state BLOB DEFAULT NULL,
+title TEXT DEFAULT NULL,
+description TEXT DEFAULT NULL,
+noti_type INTEGER DEFAULT 0,
 FOREIGN KEY(id) REFERENCES logging(id) ON DELETE CASCADE
 );
 

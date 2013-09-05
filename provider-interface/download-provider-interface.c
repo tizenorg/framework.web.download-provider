@@ -470,6 +470,60 @@ static char *__ipc_read_string(int fd)
 	return str;
 }
 
+int __ipc_read_bundle(int fd, bundle_raw **b)
+{
+	unsigned length = 0;
+	size_t recv_size = 0;
+	unsigned remain_size = 0;
+	size_t buffer_size = 0;
+	bundle_raw *b_raw = NULL;
+
+	if (fd < 0) {
+		TRACE_ERROR("[ERROR] CHECK FD[%d]", fd);
+		return NULL;
+	}
+
+	// read bundle data from client.
+	ssize_t recv_bytes = read(fd, &length, sizeof(unsigned));
+	if (recv_bytes < 0) {
+		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
+		return NULL;
+	}
+	if (length < 1 || length > DP_MAX_URL_LEN) {
+		TRACE_ERROR("[STRING LEGNTH] [%d]", length);
+		return NULL;
+	}
+	b_raw = (bundle_raw *)calloc(length, 1);
+	if (b_raw == NULL) {
+		TRACE_STRERROR("[ERROR] calloc length:%d FD[%d]", length, fd);
+		return NULL;
+	}
+	remain_size = length;
+	do {
+		buffer_size = 0;
+		if (remain_size > DP_DEFAULT_BUFFER_SIZE)
+			buffer_size = DP_DEFAULT_BUFFER_SIZE;
+		else
+			buffer_size = remain_size;
+		recv_size = (size_t)read(fd, b_raw + (int)(length - remain_size),
+				buffer_size);
+		if (recv_size > DP_DEFAULT_BUFFER_SIZE) {
+			recv_size = -1;
+			break;
+		}
+		if (recv_size > 0)
+			remain_size = remain_size - (unsigned)recv_size;
+	} while (recv_size > 0 && remain_size > 0);
+
+	if (recv_size == 0) {
+		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
+		bundle_free_encoded_rawdata(&b_raw);
+		return NULL;
+	}
+	*b = b_raw;
+	return (int)length;
+}
+
 static dp_error_type __ipc_return(int fd)
 {
 	dp_error_type errorcode = DP_ERROR_NONE;
@@ -546,6 +600,31 @@ static dp_error_type __ipc_send_string(int fd, const char *str)
 		return DP_ERROR_IO_ERROR;
 	}
 	if (fd >= 0 && write(fd, str, length * sizeof(char)) < 0) {
+		TRACE_STRERROR("[CRITICAL] send");
+		return DP_ERROR_IO_ERROR;
+	}
+	return DP_ERROR_NONE;
+}
+
+static dp_error_type __ipc_send_raw_bundle(int fd, int type, const bundle_raw *b, int len)
+{
+	if (fd < 0) {
+		TRACE_ERROR("[CHECK FD]");
+		return DP_ERROR_IO_ERROR;
+	}
+	if (b == NULL || len <= 0) {
+		TRACE_ERROR("[CHECK STRING]");
+		return DP_ERROR_INVALID_PARAMETER;
+	}
+	if (fd >= 0 && write(fd, &type, sizeof(unsigned)) < 0) {
+		TRACE_STRERROR("[CRITICAL] send");
+		return DP_ERROR_IO_ERROR;
+	}
+	if (fd >= 0 && write(fd, &len, sizeof(unsigned)) < 0) {
+		TRACE_STRERROR("[CRITICAL] send");
+		return DP_ERROR_IO_ERROR;
+	}
+	if (fd >= 0 && write(fd, b, len) < 0) {
 		TRACE_STRERROR("[CRITICAL] send");
 		return DP_ERROR_IO_ERROR;
 	}
@@ -1224,6 +1303,83 @@ static dp_error_type __dp_interface_set_int
 			errorcode = __ipc_return(fd);
 		} else {
 			errorcode = DP_ERROR_IO_ERROR;
+		}
+	}
+	pthread_mutex_unlock(&g_interface_info->mutex);
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__disconnect_from_provider();
+	pthread_mutex_unlock(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+static dp_error_type __dp_interface_set_raw_bundle
+	(const int id, const dp_command_type cmd, int type, const bundle_raw *b, int len)
+{
+	dp_error_type errorcode = DP_ERROR_NONE;
+	if (b == NULL) {
+		TRACE_ERROR("[CHECK bundle]");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+
+	DP_PRE_CHECK_ID;
+
+	pthread_mutex_lock(&g_function_mutex);
+
+	DP_CHECK_CONNECTION;
+
+	pthread_mutex_lock(&g_interface_info->mutex);
+
+	DP_CHECK_PROVIDER_STATUS;
+
+	int fd = g_interface_info->cmd_socket;
+
+	// send commnad with ID
+	errorcode = __ipc_send_command_return(id, cmd);
+	if (errorcode == DP_ERROR_NONE) {
+		// send raw bundle
+		errorcode = __ipc_send_raw_bundle(fd, type, b, len);
+		if (errorcode == DP_ERROR_NONE) {
+			// return from provider.
+			errorcode = __ipc_return(fd);
+		}
+	}
+	pthread_mutex_unlock(&g_interface_info->mutex);
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__disconnect_from_provider();
+	pthread_mutex_unlock(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+static dp_error_type __dp_interface_get_raw_bundle
+	(const int id, const dp_command_type cmd, int type, bundle_raw **value, int *len)
+{
+	int errorcode = DP_ERROR_NONE;
+	char *recv_str = NULL;
+
+	if (value == NULL) {
+		TRACE_ERROR("[CHECK buffer]");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+
+	DP_PRE_CHECK_ID;
+
+	pthread_mutex_lock(&g_function_mutex);
+
+	DP_CHECK_CONNECTION;
+
+	pthread_mutex_lock(&g_interface_info->mutex);
+
+	DP_CHECK_PROVIDER_STATUS;
+
+	int fd = g_interface_info->cmd_socket;
+
+	errorcode = __ipc_send_command_return(id, cmd);
+	if (errorcode == DP_ERROR_NONE) {
+		errorcode = __ipc_send_int(fd, type);
+		if(errorcode == 0) {
+			errorcode = __ipc_return(g_interface_info->cmd_socket);
+			if (errorcode == DP_ERROR_NONE)
+				*len = __ipc_read_bundle(fd, value);
 		}
 	}
 	pthread_mutex_unlock(&g_interface_info->mutex);
@@ -2003,4 +2159,64 @@ int dp_interface_remove_noti_extra_key(const int id, const char *key)
 	TRACE_INFO("");
 	return __dp_interface_set_string
 		(id, DP_CMD_REMOVE_EXTRA_PARAM, key);
+}
+
+int dp_interface_set_notification_bundle(const int id, int type, bundle *b)
+{
+	bundle_raw *r = NULL;
+	int len = 0;
+	int retval = -1;
+	retval = bundle_encode_raw(b, &r, &len);
+	if (retval == 0)
+		retval = __dp_interface_set_raw_bundle(id, DP_CMD_SET_NOTIFICATION_BUNDLE, type, r, len);
+	else {
+		bundle_free_encoded_rawdata(&r);
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	bundle_free_encoded_rawdata(&r);
+	return retval;
+}
+
+int dp_interface_get_notification_bundle(const int id, int type, bundle **b)
+{
+	bundle *b_loc = NULL;
+	bundle_raw *r = NULL;
+	int len = 0;
+	dp_error_type error = __dp_interface_get_raw_bundle(id, DP_CMD_GET_NOTIFICATION_BUNDLE, type, &r, &len);
+	if (error == DOWNLOAD_ADAPTOR_ERROR_NONE) {
+		b_loc = bundle_decode_raw(r, len);
+		*b = b_loc;
+	}
+	bundle_free_encoded_rawdata(&r);
+	return error;
+}
+
+int dp_interface_set_notification_title(const int id, const char *title)
+{
+	return __dp_interface_set_string(id, DP_CMD_SET_NOTIFICATION_TITLE, title);
+}
+
+int dp_interface_get_notification_title(const int id, char **title)
+{
+	return __dp_interface_get_string(id, DP_CMD_GET_NOTIFICATION_TITLE, title);
+}
+
+int dp_interface_set_notification_description(const int id, const char *description)
+{
+	return __dp_interface_set_string(id, DP_CMD_SET_NOTIFICATION_DESCRIPTION, description);
+}
+
+int dp_interface_get_notification_description(const int id, char **description)
+{
+	return __dp_interface_get_string(id, DP_CMD_GET_NOTIFICATION_DESCRIPTION, description);
+}
+
+int dp_interface_set_notification_type(const int id, int type)
+{
+	return __dp_interface_set_int(id, DP_CMD_SET_NOTIFICATION_TYPE, type);
+}
+
+int dp_interface_get_notification_type(const int id, int *type)
+{
+	return __dp_interface_get_int(id, DP_CMD_GET_NOTIFICATION_TYPE, type);
 }

@@ -372,6 +372,169 @@ dp_error_type dp_request_set_filename(int id, dp_request *request, char *filenam
 	return DP_ERROR_NONE;
 }
 
+dp_error_type dp_request_set_title(int id, dp_request *request, char *title)
+{
+	int length = 0;
+	if (!title || (length = strlen(title)) <= 1)
+		return DP_ERROR_INVALID_PARAMETER;
+
+	if (request != NULL) {
+		if (request->state == DP_STATE_COMPLETED) {
+			TRACE_ERROR
+			("[ERROR][%d] now[%s]", id, dp_print_state(request->state));
+			return DP_ERROR_INVALID_STATE;
+		}
+	} else {
+		// check id in logging table.
+		dp_state_type state = dp_db_get_state(id);
+		// check again from logging table
+		if (state == DP_STATE_COMPLETED) {
+			TRACE_ERROR("[ERROR][%d] now[%s]", id, dp_print_state(state));
+			return DP_ERROR_INVALID_STATE;
+		}
+	}
+
+	if (dp_db_replace_column
+			(id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_TITLE,
+			DP_DB_COL_TYPE_TEXT, title) < 0) {
+		TRACE_ERROR("[CHECK SQL][%d]", id);
+		if (dp_db_is_full_error() == 0) {
+			TRACE_ERROR("[SQLITE_FULL][%d]", id);
+			return DP_ERROR_NO_SPACE;
+		}
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	TRACE_SECURE_DEBUG("ID [%d] title[%s]", id, title);
+	return DP_ERROR_NONE;
+}
+
+dp_error_type dp_request_set_bundle(int id, dp_request *request, int type, bundle_raw *b, unsigned length)
+{
+	char *column = NULL;
+	if (b == NULL || (length  < 1))
+		return DP_ERROR_INVALID_PARAMETER;
+
+	if (request != NULL) {
+		if (request->state == DP_STATE_COMPLETED) {
+			TRACE_ERROR
+			("[ERROR][%d] now[%s]", id, dp_print_state(request->state));
+			return DP_ERROR_INVALID_STATE;
+		}
+	} else {
+		// check id in logging table.
+		dp_state_type state = dp_db_get_state(id);
+		// check again from logging table
+		if (state == DP_STATE_COMPLETED) {
+			TRACE_ERROR("[ERROR][%d] now[%s]", id, dp_print_state(state));
+			return DP_ERROR_INVALID_STATE;
+		}
+	}
+
+	switch(type) {
+	case DP_NOTIFICATION_BUNDLE_TYPE_ONGOING:
+		column = DP_DB_COL_RAW_BUNDLE_ONGOING;
+		break;
+	case DP_NOTIFICATION_BUNDLE_TYPE_COMPLETE:
+		column = DP_DB_COL_RAW_BUNDLE_COMPLETE;
+		break;
+	case DP_NOTIFICATION_BUNDLE_TYPE_FAILED:
+		column = DP_DB_COL_RAW_BUNDLE_FAIL;
+		break;
+	default:
+		TRACE_ERROR("[CHECK TYPE][%d]", type);
+		return DP_ERROR_INVALID_PARAMETER;
+	}
+	if (dp_db_replace_blob_column
+			(id, DP_DB_TABLE_NOTIFICATION, column, b, length) < 0) {
+		TRACE_ERROR("[CHECK SQL][%d]", id);
+		if (dp_db_is_full_error() == 0) {
+			TRACE_ERROR("[SQLITE_FULL][%d]", id);
+			return DP_ERROR_NO_SPACE;
+		}
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	//TRACE_SECURE_DEBUG("ID [%d] title[%s]", id, title);
+	return DP_ERROR_NONE;
+}
+
+dp_error_type dp_request_set_description(int id, dp_request *request, char *description)
+{
+	int length = 0;
+	if (!description || (length = strlen(description)) <= 1)
+		return DP_ERROR_INVALID_PARAMETER;
+
+	if (request != NULL) {
+		if (request->state == DP_STATE_COMPLETED) {
+			TRACE_ERROR
+			("[ERROR][%d] now[%s]", id, dp_print_state(request->state));
+			return DP_ERROR_INVALID_STATE;
+		}
+	} else {
+		// check id in logging table.
+		dp_state_type state = dp_db_get_state(id);
+		// check again from logging table
+		if (state == DP_STATE_COMPLETED) {
+			TRACE_ERROR("[ERROR][%d] now[%s]", id, dp_print_state(state));
+			return DP_ERROR_INVALID_STATE;
+		}
+	}
+
+	if (dp_db_replace_column
+			(id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_DESCRIPTION,
+			DP_DB_COL_TYPE_TEXT, description) < 0) {
+		TRACE_ERROR("[CHECK SQL][%d]", id);
+		if (dp_db_is_full_error() == 0) {
+			TRACE_ERROR("[SQLITE_FULL][%d]", id);
+			return DP_ERROR_NO_SPACE;
+		}
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+
+	TRACE_SECURE_DEBUG("ID [%d] description[%s]", id, description);
+	return DP_ERROR_NONE;
+}
+
+dp_error_type dp_request_set_noti_type(int id, dp_request *request, unsigned type)
+{
+	if (request != NULL) {
+		if (request->state == DP_STATE_COMPLETED) {
+			TRACE_ERROR
+			("[ERROR][%d] now[%s]", id, dp_print_state(request->state));
+			return DP_ERROR_INVALID_STATE;
+		}
+	} else {
+		// check id in logging table.
+		dp_state_type state = dp_db_get_state(id);
+		// check again from logging table
+		if (state == DP_STATE_COMPLETED) {
+			TRACE_ERROR("[ERROR][%d] now[%s]", id, dp_print_state(state));
+			return DP_ERROR_INVALID_STATE;
+		}
+	}
+
+	if (dp_db_replace_column
+			(id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE,
+			DP_DB_COL_TYPE_INT, &type) < 0) {
+		TRACE_ERROR("[CHECK SQL][%d]", id);
+		if (dp_db_is_full_error() == 0) {
+			TRACE_ERROR("[SQLITE_FULL][%d]", id);
+			return DP_ERROR_NO_SPACE;
+		}
+		return DP_ERROR_OUT_OF_MEMORY;
+	}
+	if (request)
+	{
+		if(!type)
+			request->auto_notification = 0;
+		else
+			request->auto_notification = 1;
+	}
+	TRACE_SECURE_DEBUG("ID [%d] enable[%d]", id, type);
+	return DP_ERROR_NONE;
+}
+
 dp_error_type dp_request_set_notification(int id, dp_request *request, unsigned enable)
 {
 	if (request != NULL) {
@@ -554,6 +717,55 @@ char *dp_request_get_filename(int id, dp_request *request, dp_error_type *errorc
 	}
 	return filename;
 }
+
+char *dp_request_get_title(int id, dp_request *request, dp_error_type *errorcode)
+{
+	char *title = NULL;
+	title = dp_db_get_text_column
+				(id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_TITLE);
+	if (title == NULL) {
+		*errorcode = DP_ERROR_NO_DATA;
+		return NULL;
+	}
+	return title;
+}
+
+bundle_raw *dp_request_get_bundle(int id, dp_request *request, dp_error_type *errorcode, char* column, int *length)
+{
+	void *blob_data = NULL;
+	blob_data = dp_db_get_blob_column
+				(id, DP_DB_TABLE_NOTIFICATION, column, length);
+	if (blob_data == NULL) {
+		*errorcode = DP_ERROR_NO_DATA;
+		return NULL;
+	}
+	return (bundle_raw*)blob_data;
+}
+
+
+char *dp_request_get_description(int id, dp_request *request, dp_error_type *errorcode)
+{
+	char *description = NULL;
+	description = dp_db_get_text_column
+				(id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_DESCRIPTION);
+	if (description == NULL) {
+		*errorcode = DP_ERROR_NO_DATA;
+		return NULL;
+	}
+	return description;
+}
+
+int dp_request_get_noti_type(int id, dp_request *request, dp_error_type *errorcode)
+{
+	int type = -1;
+	type = dp_db_get_int_column
+				(id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+	if (type == -1)
+		*errorcode = DP_ERROR_NO_DATA;
+	return type;
+}
+
+
 
 char *dp_request_get_contentname(int id, dp_request *request, dp_error_type *errorcode)
 {

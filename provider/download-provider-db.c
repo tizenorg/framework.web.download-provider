@@ -641,6 +641,64 @@ int dp_db_insert_column(int id, char *table, char *column,
 	return -1;
 }
 
+int dp_db_insert_blob_column(int id, char *table, char *column,
+						void *value, unsigned length)
+{
+	sqlite3_stmt *stmt = NULL;
+
+	if (id <= 0) {
+		TRACE_ERROR("[CHECK ID]");
+		return -1;
+	}
+
+	if (!table) {
+		TRACE_ERROR("[CHECK TABLE NAME]");
+		return -1;
+	}
+
+	if (!column) {
+		TRACE_ERROR("[CHECK COLUMN NAME]");
+		return -1;
+	}
+
+	if (__dp_sql_open() < 0) {
+		TRACE_ERROR("[OPEN] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	stmt = __prepare_query
+			(g_dp_db_handle, DP_DB_QUERY_TYPE_INSERT, table, column);
+	if (stmt == NULL) {
+		TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	int errorcode = SQLITE_OK;
+	errorcode = sqlite3_bind_blob(stmt, 2, value, (int)length, NULL);
+
+	if (errorcode != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return -1;
+	}
+
+	// VALUES ( id )
+	if (sqlite3_bind_int(stmt, 1, id) != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return -1;
+	}
+
+	errorcode = sqlite3_step(stmt);
+	if (errorcode == SQLITE_OK || errorcode == SQLITE_DONE) {
+		__dp_finalize(stmt);
+		return 0;
+	}
+	TRACE_ERROR("[SQL] [%s]", sqlite3_errmsg(g_dp_db_handle));
+	__dp_finalize(stmt);
+	return -1;
+}
+
 int dp_db_set_column(int id, char *table, char *column,
 						db_column_data_type datatype, void *value)
 {
@@ -717,6 +775,64 @@ int dp_db_set_column(int id, char *table, char *column,
 	return -1;
 }
 
+int dp_db_set_blob_column(int id, char *table, char *column,
+						void *value, unsigned length)
+{
+	sqlite3_stmt *stmt = NULL;
+
+	if (id <= 0) {
+		TRACE_ERROR("[CHECK ID]");
+		return -1;
+	}
+
+	if (!table) {
+		TRACE_ERROR("[CHECK TABLE NAME]");
+		return -1;
+	}
+
+	if (!column) {
+		TRACE_ERROR("[CHECK COLUMN NAME]");
+		return -1;
+	}
+
+	if (__dp_sql_open() < 0) {
+		TRACE_ERROR("[OPEN] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	stmt = __prepare_query
+			(g_dp_db_handle, DP_DB_QUERY_TYPE_SET, table, column);
+	if (stmt == NULL) {
+		TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return -1;
+	}
+
+	int errorcode = SQLITE_OK;
+	errorcode = sqlite3_bind_blob(stmt, 1, value, (int)length, NULL);
+
+	if (errorcode != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return -1;
+	}
+
+	// WHERE id = ?
+	if (sqlite3_bind_int(stmt, 2, id) != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return -1;
+	}
+
+	errorcode = sqlite3_step(stmt);
+	if (errorcode == SQLITE_OK || errorcode == SQLITE_DONE) {
+		__dp_finalize(stmt);
+		return 0;
+	}
+	TRACE_ERROR("[SQL] [%s]", sqlite3_errmsg(g_dp_db_handle));
+	__dp_finalize(stmt);
+	return -1;
+}
+
 int dp_db_replace_column(int id, char *table, char *column,
 						db_column_data_type datatype, void *value)
 {
@@ -740,6 +856,32 @@ int dp_db_replace_column(int id, char *table, char *column,
 		return dp_db_insert_column(id, table, column, datatype, value);
 	// UPDATE
 	return dp_db_set_column(id, table, column, datatype, value);
+}
+
+int dp_db_replace_blob_column(int id, char *table, char *column1,
+						void *value, unsigned length)
+{
+	int ret = -1;
+
+	if (id <= 0) {
+		TRACE_ERROR("[CHECK ID]");
+		return -1;
+	}
+	if (!table) {
+		TRACE_ERROR("[CHECK TABLE NAME]");
+		return -1;
+	}
+	if (!column1) {
+		TRACE_ERROR("[CHECK COLUMN NAME]");
+		return -1;
+	}
+	int check_id = dp_db_get_int_column(id, table, DP_DB_COL_ID);
+	if (check_id != id) // INSERT
+	{
+		return dp_db_insert_blob_column(id, table, column1, value, length);
+	}
+	// UPDATE
+	return dp_db_set_blob_column(id, table, column1, value, length);
 }
 
 // success : 0
@@ -798,6 +940,72 @@ char *dp_db_get_text_column(int id, char *table, char *column)
 	__dp_finalize(stmt);
 	return NULL;
 }
+
+// success : 0
+// error   : -1
+void *dp_db_get_blob_column(int id, char *table, char *column, int *length)
+{
+	sqlite3_stmt *stmt = NULL;
+
+	if (id <= 0) {
+		TRACE_ERROR("[CHECK ID]");
+		return NULL;
+	}
+
+	if (!table) {
+		TRACE_ERROR("[CHECK TABLE NAME]");
+		return NULL;
+	}
+
+	if (!column) {
+		TRACE_ERROR("[CHECK COLUMN NAME]");
+		return NULL;
+	}
+
+	if (__dp_sql_open() < 0) {
+		TRACE_ERROR("[OPEN] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return NULL;
+	}
+
+	stmt = __prepare_query
+			(g_dp_db_handle, DP_DB_QUERY_TYPE_GET, table, column);
+	if (stmt == NULL) {
+		TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		return NULL;
+	}
+
+	// WHERE id = ?
+	if (sqlite3_bind_int(stmt, 1, id) != SQLITE_OK) {
+		TRACE_ERROR("[BIND] [%s]", sqlite3_errmsg(g_dp_db_handle));
+		__dp_finalize(stmt);
+		return NULL;
+	}
+
+	if (sqlite3_step(stmt) == SQLITE_ROW) {
+		int blob_length = 0;
+		void *blob_data = NULL;
+		blob_length = sqlite3_column_bytes(stmt, 0);
+		if(blob_length > 0){
+			blob_data = (void*)calloc(blob_length, sizeof(unsigned char));
+			if(blob_data != NULL){
+				memcpy(blob_data, sqlite3_column_blob(stmt, 0),
+					sizeof(unsigned char)*blob_length);
+			} else {
+				TRACE_ERROR("[MEM] allocating");
+				blob_length = -1;
+			}
+		} else {
+			TRACE_ERROR("NO DATA");
+			blob_length = -1;
+		}
+		__dp_finalize(stmt);
+		*length = blob_length;
+		return blob_data;
+	}
+	__dp_finalize(stmt);
+	return NULL;
+}
+
 
 int dp_db_get_int_column(int id, char *table, char *column)
 {

@@ -130,6 +130,71 @@ char *dp_ipc_read_string(int fd)
 	return str;
 }
 
+unsigned dp_ipc_read_bundle(int fd, int *type, bundle_raw **b)
+{
+	unsigned length = 0;
+	size_t recv_size = 0;
+	unsigned remain_size = 0;
+	size_t buffer_size = 0;
+	bundle_raw *b_raw = NULL;
+
+	if (fd < 0) {
+		TRACE_ERROR("[ERROR] CHECK FD[%d]", fd);
+		return NULL;
+	}
+
+	// read flexible URL from client.
+	ssize_t recv_bytes = read(fd, type, sizeof(int));
+	if (recv_bytes < 0) {
+		TRACE_STRERROR("[ERROR] read FD[%d] type[%d]", fd, type);
+		return NULL;
+	}
+	if ((*type) < DP_NOTIFICATION_BUNDLE_TYPE_ONGOING||
+			(*type) > DP_NOTIFICATION_BUNDLE_TYPE_FAILED) {
+		TRACE_ERROR("[NOTI TYPE] [%d]", *type);
+		return NULL;
+	}
+	// read flexible URL from client.
+	recv_bytes = read(fd, &length, sizeof(unsigned));
+	if (recv_bytes < 0) {
+		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
+		return NULL;
+	}
+	if (length < 1 || length > DP_MAX_URL_LEN) {
+		TRACE_ERROR("[STRING LEGNTH] [%d]", length);
+		return NULL;
+	}
+	b_raw = (bundle_raw *)calloc(length, 1);
+	if (b_raw == NULL) {
+		TRACE_STRERROR("[ERROR] calloc length:%d FD[%d]", length, fd);
+		return NULL;
+	}
+	remain_size = length;
+	do {
+		buffer_size = 0;
+		if (remain_size > DP_DEFAULT_BUFFER_SIZE)
+			buffer_size = DP_DEFAULT_BUFFER_SIZE;
+		else
+			buffer_size = remain_size;
+		recv_size = (size_t)read(fd, b_raw + (int)(length - remain_size),
+				buffer_size * sizeof(char));
+		if (recv_size > DP_DEFAULT_BUFFER_SIZE) {
+			recv_size = -1;
+			break;
+		}
+		if (recv_size > 0)
+			remain_size = remain_size - (unsigned)recv_size;
+	} while (recv_size > 0 && remain_size > 0);
+
+	if (recv_size == 0) {
+		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
+		bundle_free_encoded_rawdata(&b_raw);
+		return NULL;
+	}
+	*b = b_raw;
+	return length;
+}
+
 // keep the order/ unsigned , str
 int dp_ipc_send_string(int fd, const char *str)
 {
@@ -154,6 +219,32 @@ int dp_ipc_send_string(int fd, const char *str)
 		return -1;
 	}
 	if (fd >= 0 && write(fd, str, length * sizeof(char)) <= 0) {
+		TRACE_STRERROR("[ERROR] write FD[%d]", fd);
+		return -1;
+	}
+	return 0;
+}
+
+int dp_ipc_send_bundle(int fd, bundle_raw *b, unsigned length)
+{
+	if (fd < 0) {
+		TRACE_ERROR("[ERROR] CHECK FD[%d]", fd);
+		return -1;
+	}
+	if (b == NULL) {
+		TRACE_ERROR("[ERROR] CHECK STRING FD[%d]", fd);
+		return -1;
+	}
+
+	if (length < 1) {
+		TRACE_ERROR("[ERROR] CHECK LENGTH FD[%d]", fd);
+		return -1;
+	}
+	if (fd >= 0 && write(fd, &length, sizeof(unsigned)) <= 0) {
+		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
+		return -1;
+	}
+	if (fd >= 0 && write(fd, b, length) <= 0) {
 		TRACE_STRERROR("[ERROR] write FD[%d]", fd);
 		return -1;
 	}

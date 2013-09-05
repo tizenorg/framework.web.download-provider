@@ -30,6 +30,7 @@
 
 #include <app_manager.h>
 #include <sys/smack.h>
+#include <bundle.h>
 
 #include "download-provider.h"
 #include "download-provider-log.h"
@@ -134,6 +135,22 @@ static char *__print_command(dp_command_type cmd)
 			return "SET_COMMAND_SOCKET";
 		case DP_CMD_SET_EVENT_SOCKET :
 			return "SET_EVENT_SOCKET";
+		case DP_CMD_SET_NOTIFICATION_BUNDLE:
+			return "SET_NOTIFICATION_BUNDLE";
+		case DP_CMD_SET_NOTIFICATION_TITLE:
+			return "SET_NOTIFICATION_TITLE";
+		case DP_CMD_SET_NOTIFICATION_DESCRIPTION:
+			return "SET_NOTIFICATION_DESCRIPTION";
+		case DP_CMD_SET_NOTIFICATION_TYPE:
+			return "SET_NOTIFICATION_TYPE";
+		case DP_CMD_GET_NOTIFICATION_BUNDLE:
+			return "GET_NOTIFICATION_BUNDLE";
+		case DP_CMD_GET_NOTIFICATION_TITLE:
+			return "GET_NOTIFICATION_TITLE";
+		case DP_CMD_GET_NOTIFICATION_DESCRIPTION:
+			return "GET_NOTIFICATION_DESCRIPTION";
+		case DP_CMD_GET_NOTIFICATION_TYPE:
+			return "GET_NOTIFICATION_TYPE";
 		default :
 			break;
 	}
@@ -851,6 +868,12 @@ static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *
 	case DP_CMD_GET_ETAG:
 		read_str = dp_request_get_etag(cmd->id, request, &errorcode);
 		break;
+	case DP_CMD_GET_NOTIFICATION_TITLE:
+		read_str = dp_request_get_title(cmd->id, request, &errorcode);
+		break;
+	case DP_CMD_GET_NOTIFICATION_DESCRIPTION:
+		read_str = dp_request_get_description(cmd->id, request, &errorcode);
+		break;
 	default:
 		is_checked = 0;
 		break;
@@ -896,6 +919,10 @@ static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *
 		} else {
 			read_int = request->state;
 		}
+		break;
+	case DP_CMD_GET_NOTIFICATION_TYPE:
+		TRACE_DEBUG("DP_CMD_GET_NOTIFICATION_TYPE");
+		read_int = dp_request_get_noti_type(cmd->id, request, &errorcode);
 		break;
 	case DP_CMD_GET_ERROR:
 		if (request == NULL) {
@@ -959,6 +986,54 @@ static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *
 			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
 				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
 		}
+		return errorcode;
+	}
+
+	// No read(), write a bundle variable
+	bundle_raw *b_raw = NULL;
+	int length = -1;
+	char *column = NULL;
+	errorcode = DP_ERROR_NONE;
+	is_checked = 1;
+	switch(cmd->cmd) {
+	case DP_CMD_GET_NOTIFICATION_BUNDLE:
+		TRACE_DEBUG("DP_CMD_GET_NOTIFICATION_BUNDLE");
+		dp_ipc_send_errorcode(sock, DP_ERROR_NONE);
+		if ((dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0)) {
+			TRACE_ERROR("DP_CMD_SET_NOTIFICATION_TYPE read fail");
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		switch(read_int) {
+		case DP_NOTIFICATION_BUNDLE_TYPE_ONGOING:
+			column = DP_DB_COL_RAW_BUNDLE_ONGOING;
+			break;
+		case DP_NOTIFICATION_BUNDLE_TYPE_COMPLETE:
+			column = DP_DB_COL_RAW_BUNDLE_COMPLETE;
+			break;
+		case DP_NOTIFICATION_BUNDLE_TYPE_FAILED:
+			column = DP_DB_COL_RAW_BUNDLE_FAIL;
+			break;
+		default:
+			TRACE_ERROR("[CHECK TYPE][%d]", read_int);
+			errorcode = DP_ERROR_INVALID_PARAMETER;
+		}
+		b_raw = dp_request_get_bundle(cmd->id, DP_DB_TABLE_NOTIFICATION,
+						&errorcode, column, &length);
+		break;
+	default:
+		is_checked = 0;
+		break;
+	}
+	if (is_checked == 1) {
+		dp_ipc_send_errorcode(sock, errorcode);
+		if (errorcode == DP_ERROR_NONE) {
+			dp_ipc_send_bundle(sock, b_raw, length);
+		} else {
+			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
+				__print_command(cmd->cmd), dp_print_errorcode(errorcode));
+		}
+		bundle_free_encoded_rawdata(&b_raw);
 		return errorcode;
 	}
 
@@ -1047,12 +1122,15 @@ static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *
 	return DP_ERROR_UNKNOWN;
 }
 
-static dp_error_type __dp_do_set_command(int sock, dp_command* cmd, dp_request *request)
+static dp_error_type __dp_do_set_command(int sock, dp_command *cmd, dp_request *request)
 {
 	unsigned is_checked = 1;
 	int read_int = 0;
 	dp_error_type errorcode = DP_ERROR_NONE;
 	char *read_str = NULL;
+	bundle_raw *b_raw = NULL;
+	unsigned bundle_length = 0;
+	int noti_bundle_type = 0;
 
 	dp_ipc_send_errorcode(sock, DP_ERROR_NONE);
 	// read a interger or a string, return errorcode.
@@ -1119,12 +1197,41 @@ static dp_error_type __dp_do_set_command(int sock, dp_command* cmd, dp_request *
 		}
 		errorcode = dp_request_set_filename(cmd->id, request, read_str);
 		break;
+	case DP_CMD_SET_NOTIFICATION_BUNDLE:
+		if ((bundle_length= dp_ipc_read_bundle(sock, &noti_bundle_type, &b_raw)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_bundle(cmd->id, request, noti_bundle_type, b_raw, bundle_length);
+		break;
+	case DP_CMD_SET_NOTIFICATION_TITLE:
+		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_title(cmd->id, request, read_str);
+		break;
+	case DP_CMD_SET_NOTIFICATION_DESCRIPTION:
+		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_description(cmd->id, request, read_str);
+		break;
+	case DP_CMD_SET_NOTIFICATION_TYPE:
+		if ((dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0)) {
+			errorcode = DP_ERROR_IO_ERROR;
+			break;
+		}
+		errorcode = dp_request_set_noti_type(cmd->id, request, read_int);
+		break;
 	default:
 		is_checked = 0;
 		break;
 	}
 	if (is_checked == 1) {
 		free(read_str);
+		bundle_free_encoded_rawdata(&b_raw);
 		if (errorcode != DP_ERROR_NONE) {
 			TRACE_ERROR("[ERROR][%d][%s][%s]", cmd->id,
 				__print_command(cmd->cmd), dp_print_errorcode(errorcode));

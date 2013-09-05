@@ -134,6 +134,12 @@ CREATE UNIQUE INDEX requests_index ON logging (id, state, errorcode, packagename
 #define DP_DB_COL_EXTRA_KEY "extra_key"
 #define DP_DB_COL_DISTINCT_EXTRA_KEY "DISTINCT extra_key"
 #define DP_DB_COL_EXTRA_VALUE "extra_data"
+#define DP_DB_COL_RAW_BUNDLE_ONGOING "raw_bundle_data_ongoing_state"
+#define DP_DB_COL_RAW_BUNDLE_COMPLETE "raw_bundle_data_complete_state"
+#define DP_DB_COL_RAW_BUNDLE_FAIL "raw_bundle_data_fail_state"
+#define DP_DB_COL_TITLE "title"
+#define DP_DB_COL_DESCRIPTION "description"
+#define DP_DB_COL_NOTI_TYPE "noti_type"
 
 #define DP_DB_GROUPS_COL_UID "uid"
 #define DP_DB_GROUPS_COL_GID "gid"
@@ -164,11 +170,18 @@ int dp_db_remove_all(int id);
 int dp_db_remove(int id, char *table);
 int dp_db_insert_column(int id, char *table, char *column,
 						db_column_data_type datatype, void *value);
+int dp_db_insert_blob_column(int id, char *table, char *column,
+						void *value, unsigned length);
 int dp_db_set_column(int id, char *table, char *column,
 						db_column_data_type datatype, void *value);
+int dp_db_set_blob_column(int id, char *table, char *column,
+						void *value, unsigned length);
 int dp_db_replace_column(int id, char *table, char *column,
 						db_column_data_type datatype, void *value);
+int dp_db_replace_blob_column(int id, char *table, char *column,
+						void *value, unsigned length);
 char *dp_db_get_text_column(int id, char *table, char *column);
+void *dp_db_get_blob_column(int id, char *table, char *column, int *length);
 int dp_db_get_int_column(int id, char *table, char *column);
 long long dp_db_get_int64_column(int id, char *table, char *column);
 int dp_db_update_date(int id, char *table, char *column);
