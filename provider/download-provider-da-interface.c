@@ -33,6 +33,7 @@
 #include "download-provider-queue.h"
 #include "download-provider-notification.h"
 #include "download-provider-request.h"
+#include "download-provider-network.h"
 #include "download-provider-da-interface.h"
 
 #include "download-agent-defs.h"
@@ -213,21 +214,10 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 
 	}
 
+	request->ip_changed = 0;
 	request->state = DP_STATE_DOWNLOADING;
-	if (dp_db_request_update_status(request_id, request->state, request->error) < 0) {
-		TRACE_ERROR("[ERROR][%d][SQL]", request_id);
-	}
-
-	int noti_type = dp_db_get_int_column(request_id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
-	if(noti_type == DP_NOTIFICATION_TYPE_ALL || request->auto_notification)
-		request->noti_priv_id =
-			dp_set_downloadinginfo_notification
-				(request->id, request->packagename);
-
-	if (request->group != NULL && request->group->event_socket >= 0 &&
-		request->state_cb)
-		dp_ipc_send_event(request->group->event_socket,
-			request->id, DP_STATE_DOWNLOADING, DP_ERROR_NONE, 0);
+	request->error = DP_ERROR_NONE;
+	dp_request_state_response(request);
 
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 }
@@ -546,34 +536,34 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 	request->state = state;
 	request->error = errorcode;
 
-	if (dp_db_request_update_status(request_id, request->state, request->error) < 0) {
-		TRACE_ERROR("[ERROR][%d][SQL]", request_id);
+	// auto resume when failed by ip_changed.
+	if (state == DP_STATE_FAILED && info->err == DA_ERR_NETWORK_FAIL &&
+			request->network_type != DP_NETWORK_TYPE_WIFI_DIRECT) {
+		if (request->ip_changed == 1 &&
+				dp_get_network_connection_instant_status() !=
+				DP_NETWORK_TYPE_OFF) {
+			// resume
+			TRACE_DEBUG("[RESUME][%d] will be queued", request_id);
+			request->state = DP_STATE_QUEUED;
+			request->error = DP_ERROR_NONE;
+		} else {
+			TRACE_DEBUG("[CHECK][%d] check again in timeout", request_id);
+		}
+	} else {
+		// stay on memory till called destroy by client or timeout
+		if (request->group != NULL &&
+				request->group->event_socket >= 0) {
+			/* update the received file size.
+			* The last received file size cannot update
+			* because of reducing update algorithm*/
+			if (request->received_size > 0) {
+				dp_ipc_send_event(request->group->event_socket,
+					request->id, DP_STATE_DOWNLOADING, request->error,
+					request->received_size);
+			}
+		}
+		dp_request_state_response(request);
 	}
-
-	// to prevent the crash . check packagename of request
-	int noti_type = dp_db_get_int_column(request_id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
-	if (((noti_type != DP_NOTIFICATION_TYPE_NONE) || request->auto_notification) && (request->packagename != NULL)) {
-		request->noti_priv_id =
-			dp_set_downloadedinfo_notification(request->noti_priv_id,
-				request->id, request->packagename, request->state);
-	}
-
-	// stay on memory till called destroy by client or timeout
-	if (request->group != NULL && request->group->event_socket >= 0) {
-		/* update the received file size.
-		* The last received file size cannot update
-		* because of reducing update algorithm*/
-		if (request->received_size > 0)
-			dp_ipc_send_event(request->group->event_socket,
-				request->id, DP_STATE_DOWNLOADING, request->error,
-				request->received_size);
-		if (request->state_cb)
-			dp_ipc_send_event(request->group->event_socket,
-				request->id, request->state, request->error, 0);
-		request->group->queued_count--;
-	}
-
-	request->stop_time = (int)time(NULL);
 
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 
@@ -615,20 +605,8 @@ static void __paused_cb(user_paused_info_t *info, void *user_data)
 		TRACE_ERROR("[ERROR][%d][SQL]", request_id);
 
 	request->state = DP_STATE_PAUSED;
-
-	if (dp_db_set_column
-			(request->id, DP_DB_TABLE_LOG, DP_DB_COL_STATE,
-			DP_DB_COL_TYPE_INT, &request->state) < 0) {
-		TRACE_ERROR("[ERROR][%d][SQL]", request->id);
-	}
-
-	if (request->group != NULL &&
-		request->group->event_socket >= 0 && request->state_cb)
-		dp_ipc_send_event(request->group->event_socket,
-			request->id, request->state, request->error, 0);
-
-	if (request->group != NULL)
-		request->group->queued_count--;
+	request->error = DP_ERROR_NONE;
+	dp_request_state_response(request);
 
 	CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 

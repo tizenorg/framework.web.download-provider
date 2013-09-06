@@ -833,7 +833,7 @@ static void *__dp_interface_event_manager(void *arg)
 		pthread_mutex_unlock(&g_function_mutex);
 	} // while
 
-	FD_ZERO(&read_fdset);
+	FD_CLR(g_interface_info->event_socket, &read_fdset);
 
 	TRACE_INFO("Terminate Event Thread");
 	pthread_mutex_lock(&g_function_mutex);

@@ -27,6 +27,8 @@
 #include "download-provider-db.h"
 #include "download-provider-pthread.h"
 
+#include "download-provider-notification.h"
+
 #define SMACKFS_MAGIC 0x43415d53
 #define SMACKFS_MNT "/smack"
 ///////// below functions are called by main thread of thread-request.c
@@ -858,3 +860,55 @@ dp_request *dp_request_load_from_log(int id, dp_error_type *errorcode)
 	return request;
 }
 
+
+void dp_request_state_response(dp_request *request)
+{
+	if (request == NULL) {
+		return ;
+	}
+
+	TRACE_INFO("[INFO][%d] state:%s error:%s", request->id,
+			dp_print_state(request->state),
+			dp_print_errorcode(request->error));
+
+	if (dp_db_request_update_status(request->id, request->state,
+			request->error) < 0)
+		TRACE_ERROR("[ERROR][%d][SQL]", request->id);
+
+	if (request->group != NULL && request->group->event_socket >= 0 &&
+			request->state_cb == 1) {
+		dp_ipc_send_event(request->group->event_socket, request->id,
+			request->state, request->error, 0);
+	}
+
+	if (request->state == DP_STATE_DOWNLOADING) {
+		int noti_type = dp_db_get_int_column(request->id,
+				DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+		if ((noti_type == DP_NOTIFICATION_TYPE_ALL ||
+				request->auto_notification == 1) &&
+				request->packagename != NULL) {
+			request->noti_priv_id = dp_set_downloadinginfo_notification
+				(request->id, request->packagename);
+		}
+		request->start_time = (int)time(NULL);
+		request->pause_time = 0;
+		request->stop_time = 0;
+	} else if (request->state == DP_STATE_PAUSED) {
+		if (request->group != NULL)
+			request->group->queued_count--;
+		request->pause_time = (int)time(NULL);
+	} else {
+		if (request->group != NULL )
+			request->group->queued_count--;
+		int noti_type = dp_db_get_int_column(request->id,
+				DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+		if ((noti_type != DP_NOTIFICATION_TYPE_NONE ||
+				request->auto_notification == 1) &&
+				request->packagename != NULL) {
+			request->noti_priv_id = dp_set_downloadedinfo_notification
+					(request->noti_priv_id, request->id,
+					request->packagename, request->state);
+		}
+		request->stop_time = (int)time(NULL);
+	}
+}

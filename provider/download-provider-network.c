@@ -244,7 +244,7 @@ static void __dp_network_connection_type_changed_cb(connection_type_e type, void
 {
 	TRACE_INFO("type[%d]", type);
 	dp_privates *privates = (dp_privates*)data;
-	if (!privates) {
+	if (privates == NULL) {
 		TRACE_ERROR("[CRITICAL] Invalid data");
 		return ;
 	}
@@ -270,6 +270,36 @@ static void __dp_network_connection_type_changed_cb(connection_type_e type, void
 		__dp_get_network_connection_status(privates->connection, type);
 	#endif
 	CLIENT_MUTEX_UNLOCK(&(g_dp_queue_mutex));
+}
+
+//////////////////////////////////////////////////////////////////////////
+/// @brief		[callback] called when changed network ip
+/// @todo		auto resume feature
+static void __dp_network_connection_ip_changed_cb(const char *ip, const char *ipv6, void *data)
+{
+	dp_privates *privates = (dp_privates*)data;
+	if (privates == NULL) {
+		TRACE_ERROR("[CRITICAL] Invalid data");
+		return ;
+	}
+	if (privates->network_status != DP_NETWORK_TYPE_OFF) {
+		dp_request_slots *requests = privates->requests;
+		int i = 0;
+		for (i = 0; i < DP_MAX_REQUEST; i++) {
+			int locked = pthread_mutex_trylock(&requests[i].mutex);
+			// locking failure means it used by other thread.
+			if (locked == 0) {
+				if (requests[i].request != NULL) {
+					if (requests[i].request->state == DP_STATE_DOWNLOADING ||
+						(requests[i].request->state == DP_STATE_FAILED &&
+						requests[i].request->error == DP_ERROR_CONNECTION_FAILED)) {
+						requests[i].request->ip_changed = 1;
+					}
+				}
+				CLIENT_MUTEX_UNLOCK(&requests[i].mutex);
+			}
+		}
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -303,6 +333,13 @@ int dp_network_connection_init(dp_privates *privates)
 			(privates->connection, __dp_network_connection_type_changed_cb,
 				privates)) != CONNECTION_ERROR_NONE) {
 		TRACE_ERROR("Failed connection_set_type_changed_cb [%d]", retcode);
+		connection_destroy(privates->connection);
+		return -1;
+	}
+	if ((retcode = connection_set_ip_address_changed_cb
+			(privates->connection, __dp_network_connection_ip_changed_cb,
+				privates)) != CONNECTION_ERROR_NONE) {
+		TRACE_ERROR("Failed __dp_network_connection_ip_changed_cb [%d]", retcode);
 		connection_destroy(privates->connection);
 		return -1;
 	}

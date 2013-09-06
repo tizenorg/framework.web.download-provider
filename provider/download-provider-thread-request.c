@@ -41,6 +41,7 @@
 #include "download-provider-db.h"
 #include "download-provider-queue.h"
 #include "download-provider-request.h"
+#include "download-provider-network.h"
 #include "download-provider-da-interface.h"
 
 void dp_terminate(int signo);
@@ -2065,7 +2066,23 @@ void *dp_thread_requests_manager(void *arg)
 					continue;
 				}
 
-				// client should call DESTROY command in 60 sec after finished
+				// stopped by ipchanged. decide auto resume
+				if (request->stop_time <= 0 &&
+						request->state == DP_STATE_FAILED &&
+						request->error == DP_ERROR_CONNECTION_FAILED) {
+					if (dp_get_network_connection_instant_status() !=
+							DP_NETWORK_TYPE_OFF) {
+						TRACE_DEBUG("[RESUME][%d] will be queued",
+							request->id);
+						request->state = DP_STATE_QUEUED;
+						request->error = DP_ERROR_NONE;
+						ready_requests++;
+					} else {
+						dp_request_state_response(request);
+					}
+				}
+
+				// client should call DESTROY command in MAX_INTERVAL sec after finished
 				if (request->stop_time > 0 &&
 						(now_timeout - request->stop_time) >
 						DP_CARE_CLIENT_MAX_INTERVAL) {

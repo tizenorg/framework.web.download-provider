@@ -54,6 +54,7 @@ typedef struct {
 	unsigned progress_cb; // set : 1 unset : 0
 	unsigned startcount;
 	unsigned auto_notification;
+	unsigned ip_changed;
 	dp_state_type state; // downloading state
 	dp_error_type error;
 	dp_network_type network_type;
