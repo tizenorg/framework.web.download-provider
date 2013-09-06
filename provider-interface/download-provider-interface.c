@@ -31,10 +31,6 @@
 #include <download-provider-interface.h>
 #include <download-provider.h>
 
-#ifdef DP_DBUS_ACTIVATION
-#include <dbus/dbus.h>
-#endif
-
 #ifdef SUPPORT_CHECK_IPC
 #include <sys/ioctl.h>
 #endif
@@ -128,47 +124,6 @@ dp_interface_info *g_interface_info = NULL;
 dp_interface_slot g_interface_slots[MAX_DOWNLOAD_HANDLE];
 static pthread_mutex_t g_function_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t g_interface_event_thread_id = 0;
-
-#ifdef DP_DBUS_ACTIVATION
-/* DBUS Activation */
-static int __dp_call_dp_interface_service(void)
-{
-	DBusConnection *connection = NULL;
-	DBusError dbus_error;
-
-	dbus_error_init(&dbus_error);
-
-	connection = dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_error);
-	if (connection == NULL) {
-		TRACE_ERROR("[ERROR] dbus_bus_get");
-		if (dbus_error_is_set(&dbus_error)) {
-			TRACE_ERROR("[DBUS] dbus_bus_get: %s", dbus_error.message);
-			dbus_error_free(&dbus_error);
-		}
-		return -1;
-	}
-
-	dbus_uint32_t result = 0;
-	if (dbus_bus_start_service_by_name
-			(connection,
-			DP_DBUS_SERVICE_DBUS, 0, &result, &dbus_error) == FALSE) {
-		if (dbus_error_is_set(&dbus_error)) {
-			TRACE_ERROR("[DBUS] dbus_bus_start_service_by_name: %s",
-				dbus_error.message);
-			dbus_error_free(&dbus_error);
-		}
-		dbus_connection_unref(connection);
-		return -1;
-	}
-	if (result == DBUS_START_REPLY_ALREADY_RUNNING) {
-		TRACE_INFO("DBUS_START_REPLY_ALREADY_RUNNING [%d]", result);
-	} else if (result == DBUS_START_REPLY_SUCCESS) {
-		TRACE_INFO("DBUS_START_REPLY_SUCCESS [%d]", result);
-	}
-	dbus_connection_unref(connection);
-	return 0;
-}
-#endif
 
 //////////// defines functions /////////////////
 
@@ -894,13 +849,6 @@ static int __connect_to_provider()
 	TRACE_INFO("");
 
 	if (g_interface_info == NULL) {
-
-#ifdef DP_DBUS_ACTIVATION
-		if (__dp_call_dp_interface_service() < 0) {
-			TRACE_ERROR("[DBUS IO] __dp_call_dp_interface_service");
-			return DP_ERROR_IO_ERROR;
-		}
-#endif
 
 		g_interface_info =
 			(dp_interface_info *) calloc(1, sizeof(dp_interface_info));

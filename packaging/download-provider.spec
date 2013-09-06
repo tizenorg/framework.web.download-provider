@@ -25,7 +25,6 @@ BuildRequires:  pkgconfig(capi-appfw-app-manager)
 BuildRequires:  pkgconfig(capi-network-connection)
 BuildRequires:  pkgconfig(notification)
 BuildRequires:  pkgconfig(appsvc)
-BuildRequires:  pkgconfig(dbus-1)
 BuildRequires:  pkgconfig(wifi-direct)
 BuildRequires:  pkgconfig(libsmack)
 BuildRequires:  gettext-devel
@@ -52,7 +51,6 @@ Description: download the contents in background (developement files)
 %define _databasedir /opt/usr/dbspace
 %define _databasefile %{_databasedir}/.download-provider.db
 %define _sqlschemafile %{_sqlschemadir}/download-provider-schema.sql
-%define _dbusservicedir /usr/share/dbus-1/services
 %define _licensedir /usr/share/license
 %define _smackruledir /opt/etc/smack/accesses.d
 
@@ -73,10 +71,8 @@ Description: download the contents in background (developement files)
 		-DDATABASE_SCHEMA_DIR=%{_sqlschemadir} \\\
 		-DDATABASE_FILE:PATH=%{_databasefile} \\\
 		-DDATABASE_SCHEMA_FILE=%{_sqlschemafile} \\\
-		-DDBUS_SERVICE_DIR:PATH=%{_dbusservicedir} \\\
 		-DLICENSE_DIR:PATH=%{_licensedir} \\\
 		-DSMACK_RULE_DIR:PATH=%{_smackruledir} \\\
-		-DSUPPORT_DBUS_SYSTEM:BOOL=OFF \\\
 		-DSUPPORT_WIFI_DIRECT:BOOL=OFF \\\
 		-DSUPPORT_LOG_MESSAGE:BOOL=ON \\\
 		-DSUPPORT_CHECK_IPC:BOOL=ON \\\
@@ -132,7 +128,6 @@ fi
 %{_libdir}/libdownload-provider-interface.so.0
 %{_bindir}/%{name}
 %{_licensedir}/%{name}
-%{_dbusservicedir}/org.download-provider.service
 %{_smackruledir}/%{name}.rule
 %{_sqlschemafile}
 

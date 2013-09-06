@@ -21,11 +21,6 @@
 extern "C" {
 #endif
 
-#ifdef DP_SUPPORT_DBUS_ACTIVATION
-#define DP_DBUS_ACTIVATION
-#define DP_DBUS_SERVICE_DBUS		"org.download-provider"
-#endif
-
 typedef enum {
 	DP_STATE_NONE = 0,
 	DP_STATE_READY = DP_STATE_NONE + 5, // created id, set some info.

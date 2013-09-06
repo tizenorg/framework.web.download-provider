@@ -24,10 +24,6 @@
 #include <libintl.h>
 #include <systemd/sd-daemon.h>
 
-#ifdef DP_SUPPORT_DBUS_ACTIVATION
-#include <dbus/dbus.h>
-#endif
-
 #include "vconf.h"
 
 #include "download-provider-config.h"
@@ -50,40 +46,9 @@ static pthread_t g_dp_thread_queue_manager_pid = 0;
 // need for libsoup, decided the life-time by mainloop.
 GMainLoop *g_main_loop_handle = 0;
 
-#ifdef DP_SUPPORT_DBUS_ACTIVATION
-static int __register_dbus_service(void)
-{
-	DBusError dbus_error;
-	DBusConnection *dp_dbus_connection = NULL;
-
-	dbus_error_init(&dbus_error);
-
-	dp_dbus_connection = dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_error);
-	if (dp_dbus_connection == NULL) {
-		TRACE_ERROR("[DBUS] dbus_bus_get: %s", dbus_error.message);
-		dbus_error_free(&dbus_error);
-		return -1;
-	}
-
-	if (dbus_bus_request_name
-			(dp_dbus_connection, DP_DBUS_SERVICE_DBUS, 0, &dbus_error) < 0 ||
-			dbus_error_is_set(&dbus_error)) {
-		TRACE_ERROR("[DBUS] request_name %s", dbus_error.message);
-		dbus_error_free(&dbus_error);
-		dbus_connection_unref(dp_dbus_connection);
-		dp_dbus_connection = NULL;
-		return -1;
-	}
-	dbus_connection_unref(dp_dbus_connection);
-	dp_dbus_connection = NULL;
-	return 0;
-}
-
-#endif
-
 void dp_terminate(int signo)
 {
-	TRACE_INFO("Received SIGTERM");
+	TRACE_INFO("Received SIGTERM:%d", signo);
 	if (g_main_loop_is_running(g_main_loop_handle))
 		g_main_loop_quit(g_main_loop_handle);
 }
@@ -170,6 +135,10 @@ int main(int argc, char **argv)
 		TRACE_ERROR("failed to register signal callback");
 		exit(EXIT_FAILURE);
 	}
+	if (signal(SIGINT, dp_terminate) == SIG_ERR) {
+		TRACE_ERROR("failed to register signal callback");
+		exit(EXIT_FAILURE);
+	}
 	// write IPC_FD_PATH. and lock
 	if ((lock_fd = dp_lock_pid(DP_LOCK_PID)) < 0) {
 		TRACE_ERROR
@@ -208,16 +177,6 @@ int main(int argc, char **argv)
 		TRACE_ERROR("[CRITICAL] failed to bind SOCKET");
 		goto DOWNLOAD_EXIT;
 	}
-
-#ifdef DP_SUPPORT_DBUS_ACTIVATION
-	TRACE_INFO("SUPPORT DBUS-ACTIVATION");
-	if (__register_dbus_service() < 0) {
-		TRACE_ERROR("[LAUNCH ERROR] __register_dbus_service");
-		goto DOWNLOAD_EXIT;
-	}
-#else
-	TRACE_INFO("Not SUPPORT DBUS-ACTIVATION");
-#endif
 
 	dp_db_open();
 
