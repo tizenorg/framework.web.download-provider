@@ -254,12 +254,20 @@ static void __progress_cb(user_progress_info_t *info, void *user_data)
 		// send event every 1 second.
 		if (request->progress_lasttime != localTime->tm_sec) {
 			request->progress_lasttime = localTime->tm_sec;
-			int noti_type = dp_db_get_int_column(request->id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
-			if(noti_type == DP_NOTIFICATION_TYPE_ALL || request->auto_notification)
+			if (request->auto_notification) {
 				dp_update_downloadinginfo_notification
 					(request->noti_priv_id,
 					(double)request->received_size,
 					(double)request->file_size);
+			} else {
+				int noti_type = dp_db_get_int_column(request->id, DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+				if(noti_type == DP_NOTIFICATION_TYPE_ALL)
+					dp_update_downloadinginfo_notification
+						(request->noti_priv_id,
+						(double)request->received_size,
+						(double)request->file_size);
+			}
+
 			if (request->progress_cb && request->group != NULL &&
 					request->group->event_socket >= 0 &&
 					request->received_size > 0)

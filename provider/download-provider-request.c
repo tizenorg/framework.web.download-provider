@@ -882,13 +882,17 @@ void dp_request_state_response(dp_request *request)
 	}
 
 	if (request->state == DP_STATE_DOWNLOADING) {
-		int noti_type = dp_db_get_int_column(request->id,
-				DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
-		if ((noti_type == DP_NOTIFICATION_TYPE_ALL ||
-				request->auto_notification == 1) &&
+		if (request->auto_notification == 1 &&
 				request->packagename != NULL) {
 			request->noti_priv_id = dp_set_downloadinginfo_notification
 				(request->id, request->packagename);
+		} else {
+			int noti_type = dp_db_get_int_column(request->id,
+					DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+			if (noti_type == DP_NOTIFICATION_TYPE_ALL &&
+					request->packagename != NULL)
+				request->noti_priv_id = dp_set_downloadinginfo_notification
+					(request->id, request->packagename);
 		}
 		request->start_time = (int)time(NULL);
 		request->pause_time = 0;
@@ -900,15 +904,23 @@ void dp_request_state_response(dp_request *request)
 	} else {
 		if (request->group != NULL )
 			request->group->queued_count--;
-		int noti_type = dp_db_get_int_column(request->id,
-				DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
-		if ((noti_type != DP_NOTIFICATION_TYPE_NONE ||
-				request->auto_notification == 1) &&
+
+		if (request->auto_notification == 1 &&
 				request->packagename != NULL) {
 			request->noti_priv_id = dp_set_downloadedinfo_notification
 					(request->noti_priv_id, request->id,
 					request->packagename, request->state);
+
+		} else {
+			int noti_type = dp_db_get_int_column(request->id,
+					DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+			if (noti_type != DP_NOTIFICATION_TYPE_NONE &&
+					request->packagename != NULL)
+				request->noti_priv_id = dp_set_downloadedinfo_notification
+						(request->noti_priv_id, request->id,
+						request->packagename, request->state);
 		}
+
 		request->stop_time = (int)time(NULL);
 	}
 }
