@@ -95,12 +95,11 @@ make %{?jobs:-j%jobs}
 rm -rf %{buildroot}
 %make_install
 mkdir -p %{buildroot}%{_licensedir}
+mkdir -p %{buildroot}/%{_data_install_path}
 mkdir -p %{buildroot}%{_libdir}/systemd/system/graphical.target.wants
 mkdir -p %{buildroot}%{_libdir}/systemd/system/sockets.target.wants
 ln -s ../download-provider.service %{buildroot}%{_libdir}/systemd/system/graphical.target.wants/
 ln -s ../download-provider.socket %{buildroot}%{_libdir}/systemd/system/sockets.target.wants/
-
-mkdir -p %{buildroot}/%{_data_install_path}
 
 %post
 mkdir -p %{_databasedir}

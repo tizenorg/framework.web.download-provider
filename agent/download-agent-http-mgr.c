@@ -187,7 +187,7 @@ da_result_t request_http_download(stage_info *stage)
 #ifdef PAUSE_EXIT
 		case HTTP_STATE_PAUSED:
 #endif
-			DA_LOG(HTTPManager, "exiting...");
+			DA_LOG_VERBOSE(HTTPManager, "exiting...");
 			need_wait = DA_FALSE;
 			break;
 
@@ -1304,7 +1304,7 @@ da_result_t handle_http_body(stage_info *stage, char *body, int body_len)
 	http_state_t http_state = 0;
 	int slot_id = DA_INVALID_ID;
 
-	//	DA_LOG_FUNC_START(HTTPManager);
+	DA_LOG_FUNC_LOGV(HTTPManager);
 
 	slot_id = GET_STAGE_DL_ID(stage);
 

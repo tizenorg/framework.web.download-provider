@@ -26,7 +26,6 @@
 	<assign>
 		<filesystem path="/usr/lib/libdownload-provider-interface.so*" label="_" exec_label="none" />
 		<filesystem path="/usr/lib/libdownloadagent2.so*" label="_" exec_label="none" />
-		<filesystem path="/usr/share/dbus-1/services/org.download-provider.service" label="_" exec_label="none" />
 		<filesystem path="/usr/lib/systemd/user/download-provider.service" label="_" exec_label="none" />
 		<filesystem path="/usr/lib/systemd/user/tizen-middleware.target.wants/download-provider.service" label="_" exec_label="none" />
 		<filesystem path="/usr/lib/systemd/user/download-provider.socket" label="_" exec_label="none" />

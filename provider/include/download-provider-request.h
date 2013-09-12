@@ -52,6 +52,7 @@ char *dp_request_get_etag(int id, dp_request *request, dp_error_type *errorcode)
 char *dp_request_get_savedpath(int id, dp_request *request, dp_error_type *errorcode);
 char *dp_request_get_tmpsavedpath(int id, dp_request *request, dp_error_type *errorcode);
 char *dp_request_get_mimetype(int id, dp_request *request, dp_error_type *errorcode);
+char *dp_request_get_pkg_name(int id, dp_request *request, dp_error_type *errorcode);
 dp_request *dp_request_load_from_log(int id, dp_error_type *errorcode);
 void dp_request_state_response(dp_request *request);
 #endif

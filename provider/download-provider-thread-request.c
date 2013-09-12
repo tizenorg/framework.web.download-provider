@@ -43,6 +43,7 @@
 #include "download-provider-request.h"
 #include "download-provider-network.h"
 #include "download-provider-da-interface.h"
+#include "download-provider-notification.h"
 
 void dp_terminate(int signo);
 
@@ -264,8 +265,6 @@ static void __clear_group(dp_privates *privates, dp_client_group *group)
 {
 	dp_request *request = NULL;
 	int i = 0;
-	int state = DP_STATE_FAILED;
-	int errorcode = DP_ERROR_CLIENT_DOWN;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
 
@@ -1016,8 +1015,9 @@ static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *
 		default:
 			TRACE_ERROR("[CHECK TYPE][%d]", read_int);
 			errorcode = DP_ERROR_INVALID_PARAMETER;
+			break;
 		}
-		b_raw = dp_request_get_bundle(cmd->id, DP_DB_TABLE_NOTIFICATION,
+		b_raw = dp_request_get_bundle(cmd->id, request,
 						&errorcode, column, &length);
 		break;
 	default:
@@ -1197,7 +1197,7 @@ static dp_error_type __dp_do_set_command(int sock, dp_command *cmd, dp_request *
 		errorcode = dp_request_set_filename(cmd->id, request, read_str);
 		break;
 	case DP_CMD_SET_NOTIFICATION_BUNDLE:
-		if ((bundle_length= dp_ipc_read_bundle(sock, &noti_bundle_type, &b_raw)) == NULL) {
+		if ((bundle_length = dp_ipc_read_bundle(sock, &noti_bundle_type, &b_raw)) == 0) {
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
 		}
@@ -1359,10 +1359,20 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 					if (__dp_call_cancel_agent(request) < 0)
 						TRACE_ERROR("[fail][%d]cancel_agent", cmd->id);
 					request->state = DP_STATE_CANCELED;
-					dp_set_downloadedinfo_notification(request->noti_priv_id,
-							request->id, request->packagename, request->state);
-					//reset setting. After unlock mutex, the da callback can be called
-					request->auto_notification = 0;
+					if (request->auto_notification == 1 &&
+									request->packagename != NULL) {
+						request->noti_priv_id = dp_set_downloadedinfo_notification
+								(request->noti_priv_id, request->id,
+								request->packagename, request->state);
+					} else {
+						int noti_type = dp_db_get_int_column(request->id,
+								DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
+						if (noti_type != DP_NOTIFICATION_TYPE_NONE &&
+								request->packagename != NULL)
+							request->noti_priv_id = dp_set_downloadedinfo_notification
+									(request->noti_priv_id, request->id,
+									request->packagename, request->state);
+					}
 				}
 			}
 		}
