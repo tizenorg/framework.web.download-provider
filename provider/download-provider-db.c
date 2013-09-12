@@ -851,8 +851,6 @@ int dp_db_replace_column(int id, char *table, char *column,
 int dp_db_replace_blob_column(int id, char *table, char *column1,
 						void *value, unsigned length)
 {
-	int ret = -1;
-
 	if (id <= 0) {
 		TRACE_ERROR("[CHECK ID]");
 		return -1;

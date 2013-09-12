@@ -436,23 +436,23 @@ int __ipc_read_bundle(int fd, bundle_raw **b)
 
 	if (fd < 0) {
 		TRACE_ERROR("[ERROR] CHECK FD[%d]", fd);
-		return NULL;
+		return 0;
 	}
 
 	// read bundle data from client.
 	ssize_t recv_bytes = read(fd, &length, sizeof(unsigned));
 	if (recv_bytes < 0) {
 		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
-		return NULL;
+		return 0;
 	}
 	if (length < 1 || length > DP_MAX_URL_LEN) {
 		TRACE_ERROR("[STRING LEGNTH] [%d]", length);
-		return NULL;
+		return 0;
 	}
 	b_raw = (bundle_raw *)calloc(length, 1);
 	if (b_raw == NULL) {
 		TRACE_STRERROR("[ERROR] calloc length:%d FD[%d]", length, fd);
-		return NULL;
+		return 0;
 	}
 	remain_size = length;
 	do {
@@ -474,7 +474,7 @@ int __ipc_read_bundle(int fd, bundle_raw **b)
 	if (recv_size == 0) {
 		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
 		bundle_free_encoded_rawdata(&b_raw);
-		return NULL;
+		return 0;
 	}
 	*b = b_raw;
 	return (int)length;
@@ -1285,7 +1285,6 @@ static dp_error_type __dp_interface_get_raw_bundle
 	(const int id, const dp_command_type cmd, int type, bundle_raw **value, int *len)
 {
 	int errorcode = DP_ERROR_NONE;
-	char *recv_str = NULL;
 
 	if (value == NULL) {
 		TRACE_ERROR("[CHECK buffer]");
@@ -1309,8 +1308,11 @@ static dp_error_type __dp_interface_get_raw_bundle
 		errorcode = __ipc_send_int(fd, type);
 		if(errorcode == 0) {
 			errorcode = __ipc_return(g_interface_info->cmd_socket);
-			if (errorcode == DP_ERROR_NONE)
+			if (errorcode == DP_ERROR_NONE) {
 				*len = __ipc_read_bundle(fd, value);
+				if (*len <= 0)
+					errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
+			}
 		}
 	}
 	pthread_mutex_unlock(&g_interface_info->mutex);
@@ -2085,7 +2087,7 @@ int dp_interface_get_notification_bundle(const int id, int type, bundle **b)
 	bundle_raw *r = NULL;
 	int len = 0;
 	dp_error_type error = __dp_interface_get_raw_bundle(id, DP_CMD_GET_NOTIFICATION_BUNDLE, type, &r, &len);
-	if (error == DOWNLOAD_ADAPTOR_ERROR_NONE) {
+	if (error == DP_ERROR_NONE) {
 		b_loc = bundle_decode_raw(r, len);
 		*b = b_loc;
 	}

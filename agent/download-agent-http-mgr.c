@@ -904,6 +904,10 @@ da_result_t handle_event_control(stage_info *stage, q_event_t *event)
 		case Q_EVENT_TYPE_CONTROL_NET_DISCONNECTED:
 			DA_LOG(HTTPManager, "Q_EVENT_TYPE_CONTROL_NET_DISCONNECTED");
 			break;
+		case Q_EVENT_TYPE_CONTROL_NONE:
+		default:
+			DA_LOG_ERR(HTTPManager, "Cannot enter here");
+			break;
 		}
 	}
 
@@ -922,19 +926,14 @@ da_result_t handle_event_http(stage_info *stage, q_event_t *event)
 		switch (q_event_data_http->data_type) {
 		case Q_EVENT_TYPE_DATA_PACKET:
 			ret = handle_event_http_packet(stage, event);
-
 			break;
-
 		case Q_EVENT_TYPE_DATA_FINAL:
 			DA_LOG_VERBOSE(HTTPManager, "Q_EVENT_TYPE_DATA_FINAL");
 			ret = handle_event_http_final(stage, event);
-
 			break;
-
 		case Q_EVENT_TYPE_DATA_ABORT:
 			DA_LOG_VERBOSE(HTTPManager, "Q_EVENT_TYPE_DATA_ABORT");
 			ret = handle_event_http_abort(stage, event);
-
 			break;
 		}
 	}

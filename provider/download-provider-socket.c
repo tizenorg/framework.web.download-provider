@@ -140,34 +140,34 @@ unsigned dp_ipc_read_bundle(int fd, int *type, bundle_raw **b)
 
 	if (fd < 0) {
 		TRACE_ERROR("[ERROR] CHECK FD[%d]", fd);
-		return NULL;
+		return 0;
 	}
 
 	// read flexible URL from client.
 	ssize_t recv_bytes = read(fd, type, sizeof(int));
 	if (recv_bytes < 0) {
 		TRACE_STRERROR("[ERROR] read FD[%d] type[%d]", fd, type);
-		return NULL;
+		return 0;
 	}
 	if ((*type) < DP_NOTIFICATION_BUNDLE_TYPE_ONGOING||
 			(*type) > DP_NOTIFICATION_BUNDLE_TYPE_FAILED) {
 		TRACE_ERROR("[NOTI TYPE] [%d]", *type);
-		return NULL;
+		return 0;
 	}
 	// read flexible URL from client.
 	recv_bytes = read(fd, &length, sizeof(unsigned));
 	if (recv_bytes < 0) {
 		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
-		return NULL;
+		return 0;
 	}
 	if (length < 1 || length > DP_MAX_URL_LEN) {
 		TRACE_ERROR("[STRING LEGNTH] [%d]", length);
-		return NULL;
+		return 0;
 	}
 	b_raw = (bundle_raw *)calloc(length, 1);
 	if (b_raw == NULL) {
 		TRACE_STRERROR("[ERROR] calloc length:%d FD[%d]", length, fd);
-		return NULL;
+		return 0;
 	}
 	remain_size = length;
 	do {
@@ -189,7 +189,7 @@ unsigned dp_ipc_read_bundle(int fd, int *type, bundle_raw **b)
 	if (recv_size == 0) {
 		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
 		bundle_free_encoded_rawdata(&b_raw);
-		return NULL;
+		return 0;
 	}
 	*b = b_raw;
 	return length;

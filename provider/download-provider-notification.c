@@ -154,17 +154,6 @@ static char *__get_string_status(dp_state_type state)
 	}
 	return message;
 }
-static void __free_char_pointer_array(char **array, int count)
-{
-	int i = 0;
-	if (count < 0)
-		count = 0;
-	for (i = 0; i < count; i++) {
-		if (array[i])
-			free(array[i]);
-	}
-	free(array);
-}
 
 int dp_set_downloadinginfo_notification(int id, char *packagename)
 {
