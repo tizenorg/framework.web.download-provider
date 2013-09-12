@@ -1367,7 +1367,7 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 					} else {
 						int noti_type = dp_db_get_int_column(request->id,
 								DP_DB_TABLE_NOTIFICATION, DP_DB_COL_NOTI_TYPE);
-						if (noti_type != DP_NOTIFICATION_TYPE_NONE &&
+						if (noti_type > DP_NOTIFICATION_TYPE_NONE &&
 								request->packagename != NULL)
 							request->noti_priv_id = dp_set_downloadedinfo_notification
 									(request->noti_priv_id, request->id,
