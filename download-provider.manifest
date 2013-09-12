@@ -15,8 +15,8 @@
 			<smack request="net-config" type="rw" />
 		</request>
 		<permit>
-			<smack permit="com.samsung.indicator" type="rx" />
-			<smack permit="com.samsung.quickpanel" type="rx" />
+			<smack permit="org.tizen.indicator" type="rx" />
+			<smack permit="org.tizen.quickpanel" type="rx" />
 			<smack permit="system::use_internet" type="w" />
 		</permit>
 	</define>
