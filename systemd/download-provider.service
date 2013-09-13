@@ -1,5 +1,6 @@
 [Unit]
 Description=Download provider service
+After=check-mount.service
 
 [Service]
 Type=simple
