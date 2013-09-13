@@ -176,12 +176,12 @@ int dp_set_downloadinginfo_notification(int id, char *packagename)
 	if(title != NULL) {
 		err = notification_set_text(noti_handle, NOTIFICATION_TEXT_TYPE_TITLE,
 			title, NULL, NOTIFICATION_VARIABLE_TYPE_NONE);
+		free(title);
 		if (err != NOTIFICATION_ERROR_NONE) {
 			TRACE_ERROR("[FAIL] set title [%s]", __noti_error_str(err));
 			notification_free(noti_handle);
 			return -1;
 		}
-		free(title);
 	} else {
 		char *content_name =
 			dp_db_get_text_column
@@ -340,12 +340,12 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 		err = notification_set_text(noti_handle,
 				NOTIFICATION_TEXT_TYPE_INFO_2, description,
 				NULL, NOTIFICATION_VARIABLE_TYPE_NONE);
+		free(description);
 		if (err != NOTIFICATION_ERROR_NONE) {
 			TRACE_ERROR("[FAIL] set description [%s]", __noti_error_str(err));
 			notification_free(noti_handle);
 			return -1;
 		}
-		free(description);
 	} else {
 		char *url = NULL;
 		url = dp_db_get_text_column
@@ -371,12 +371,12 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 	if(title != NULL) {
 		err = notification_set_text(noti_handle, NOTIFICATION_TEXT_TYPE_CONTENT,
 			title, NULL, NOTIFICATION_VARIABLE_TYPE_NONE);
+		free(title);
 		if (err != NOTIFICATION_ERROR_NONE) {
 			TRACE_ERROR("[FAIL] set title [%s]", __noti_error_str(err));
 			notification_free(noti_handle);
 			return -1;
 		}
-		free(title);
 	} else {
 		char *content_name =
 				dp_db_get_text_column
