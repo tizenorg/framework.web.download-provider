@@ -32,9 +32,10 @@
 #define S_(s) dgettext("sys_string", s)
 #define __(s) dgettext(PKG_NAME, s)
 
-#define DP_NOTIFICATION_ICON_PATH IMAGE_DIR"/Q02_Notification_Download_failed.png"
+#define DP_NOTIFICATION_ICON_PATH IMAGE_DIR"/Q02_Notification_download_complete.png"
 #define DP_NOTIFICATION_ONGOING_ICON_PATH IMAGE_DIR"/Notification_download_animation.gif"
 #define DP_NOTIFICATION_DOWNLOADING_ICON_PATH "reserved://indicator/ani/downloading"
+#define DP_NOTIFICATION_FAILED_ICON_PATH IMAGE_DIR"/Q02_Notification_download_failed.png"
 
 static const char *__noti_error_str(
 		notification_error_e err)
@@ -510,7 +511,7 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 			}
 		}
 		err = notification_set_image(noti_handle, NOTIFICATION_IMAGE_TYPE_ICON,
-				DP_NOTIFICATION_ICON_PATH);
+				DP_NOTIFICATION_FAILED_ICON_PATH);
 		if (err != NOTIFICATION_ERROR_NONE) {
 			TRACE_ERROR("[FAIL] set icon [%s]", __noti_error_str(err));
 			bundle_free(b);
