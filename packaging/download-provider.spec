@@ -10,6 +10,7 @@ Requires(post): libdevice-node
 Requires(post): org.tizen.indicator
 Requires(post): org.tizen.quickpanel
 Requires(post): sqlite
+Requires(post): connman
 BuildRequires:  cmake
 BuildRequires:  libprivilege-control-conf
 BuildRequires:  pkgconfig(glib-2.0)
