@@ -1,7 +1,7 @@
 Name:       download-provider
 Summary:    download the contents in background.
 Version:    1.1.4
-Release:    0
+Release:    1
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
 Source0:    %{name}-%{version}.tar.gz
@@ -143,6 +143,9 @@ fi
 %{_libdir}/pkgconfig/download-provider-interface.pc
 
 %changelog
+* Tue Sep 17 2013 Jungki Kwak <jungki.kwak@samsung.com> 
+- Add depenency of connman for smack label
+
 * Thu Sep 12 2013 Jungki Kwak <jungki.kwak@samsung.com>
 - Resolve a bug to check return value
 - Resolve build warnnings and add error exception
