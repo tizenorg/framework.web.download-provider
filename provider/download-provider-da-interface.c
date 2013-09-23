@@ -190,7 +190,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 					request->error = DP_ERROR_NO_SPACE;
 					TRACE_ERROR("[SQLITE_FULL][%d]", request_id);
 					if (dp_cancel_agent_download(request->agent_id) < 0)
-						TRACE_INFO("[fail][%d]cancel_agent", request_id);
+						TRACE_ERROR("[fail][%d]cancel_agent", request_id);
 					CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 					return ;
 				}
@@ -205,7 +205,7 @@ static void __download_info_cb(user_download_info_t *info, void *user_data)
 					request->error = DP_ERROR_NO_SPACE;
 					TRACE_ERROR("[SQLITE_FULL][%d]", request_id);
 					if (dp_cancel_agent_download(request->agent_id) < 0)
-						TRACE_INFO("[fail][%d]cancel_agent", request_id);
+						TRACE_ERROR("[fail][%d]cancel_agent", request_id);
 					CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 					return ;
 				}
@@ -404,8 +404,6 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 		TRACE_ERROR("[NULL-CHECK] Agent info");
 		return ;
 	}
-	TRACE_INFO("Agent ID[%d] err[%d] http_status[%d]",
-		info->download_id, info->err, info->http_status);
 	dp_request_slots *request_slot = (dp_request_slots *) user_data;
 	if (request_slot == NULL) {
 		TRACE_ERROR("[NULL-CHECK] request req_id:%d", info->download_id);
@@ -495,7 +493,7 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 					request->error = DP_ERROR_NO_SPACE;
 					TRACE_ERROR("[SQLITE_FULL][%d]", request_id);
 					if (dp_cancel_agent_download(request->agent_id) < 0)
-						TRACE_INFO("[fail][%d]cancel_agent", request_id);
+						TRACE_ERROR("[fail][%d]cancel_agent", request_id);
 					CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 					return ;
 				}
@@ -510,7 +508,7 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 					request->error = DP_ERROR_NO_SPACE;
 					TRACE_ERROR("[SQLITE_FULL][%d]", request_id);
 					if (dp_cancel_agent_download(request->agent_id) < 0)
-						TRACE_INFO("[fail][%d]cancel_agent", request_id);
+						TRACE_ERROR("[fail][%d]cancel_agent", request_id);
 					CLIENT_MUTEX_UNLOCK(&request_slot->mutex);
 					return ;
 				}
@@ -536,7 +534,7 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 		} else {
 			state = DP_STATE_FAILED;
 			errorcode = __change_error(info->err);
-			TRACE_INFO("[FAILED][%d][%s]", request_id,
+			TRACE_ERROR("[FAILED][%d][%s]", request_id,
 					dp_print_errorcode(errorcode));
 		}
 	}
@@ -810,7 +808,7 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 	if (tmp_saved_path) {
 		etag = dp_request_get_etag(request->id, request, &errorcode);
 		if (etag) {
-			TRACE_INFO("[RESUME][%d]", request->id);
+			TRACE_DEBUG("[RESUME][%d]", request->id);
 			ext_data.etag = etag;
 			ext_data.temp_file_path = tmp_saved_path;
 		} else {
@@ -868,7 +866,7 @@ dp_error_type dp_start_agent_download(dp_request_slots *request_slot)
 	// if start_download() return error cause of maximun download limitation,
 	// set state to DOWNLOAD_STATE_PENDED.
 	if (da_ret == DA_ERR_ALREADY_MAX_DOWNLOAD) {
-		TRACE_INFO("[PENDING][%d] DA_ERR_ALREADY_MAX_DOWNLOAD [%d]",
+		TRACE_DEBUG("[PENDING][%d] DA_ERR_ALREADY_MAX_DOWNLOAD [%d]",
 			request->id, da_ret);
 		return DP_ERROR_TOO_MANY_DOWNLOADS;
 	} else if (da_ret != DA_RESULT_OK) {

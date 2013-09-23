@@ -48,7 +48,7 @@ GMainLoop *g_main_loop_handle = 0;
 
 void dp_terminate(int signo)
 {
-	TRACE_INFO("Received SIGTERM:%d", signo);
+	TRACE_DEBUG("Received SIGTERM:%d", signo);
 	if (g_main_loop_is_running(g_main_loop_handle))
 		g_main_loop_quit(g_main_loop_handle);
 }

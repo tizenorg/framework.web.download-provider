@@ -1475,9 +1475,6 @@ static dp_error_type __dp_do_action_command(int sock, dp_command* cmd, dp_reques
 				errorcode = DP_ERROR_OUT_OF_MEMORY;
 		}
 		if (errorcode == DP_ERROR_NONE) {
-			TRACE_INFO("[%s][%d]cancel_agent(%d) state:%s",
-				__print_command(cmd->cmd), cmd->id,
-				request->agent_id, dp_print_state(request->state));
 			if (__dp_call_cancel_agent(request) < 0)
 				TRACE_ERROR("[fail][%d]cancel_agent", cmd->id);
 			request->state = DP_STATE_CANCELED;
@@ -1680,7 +1677,7 @@ void *dp_thread_requests_manager(void *arg)
 			socklen_t cr_len = sizeof(credential);
 			if (getsockopt(clientfd, SOL_SOCKET, SO_PEERCRED,
 				&credential, &cr_len) == 0) {
-				TRACE_INFO
+				TRACE_DEBUG
 					("credential : pid=%d, uid=%d, gid=%d",
 					credential.pid, credential.uid, credential.gid);
 			}
@@ -1803,7 +1800,7 @@ void *dp_thread_requests_manager(void *arg)
 							dp_ipc_send_custom_type(sock,
 								&privates->requests[index].request->id,
 								sizeof(int));
-							TRACE_INFO("[CREATE] GOOD id:%d slot:%d time:%d",
+							TRACE_DEBUG("[CREATE] GOOD id:%d slot:%d time:%d",
 								privates->requests[index].request->id,
 								index, ((int)time(NULL) - time_of_job));
 						} else {

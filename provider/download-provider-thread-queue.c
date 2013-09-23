@@ -345,7 +345,7 @@ void *dp_thread_queue_manager(void *arg)
 		}
 
 		if (active_count >= DP_MAX_DOWNLOAD_AT_ONCE) {
-			TRACE_INFO("[BUSY] Active[%d] Max[%d]",
+			TRACE_DEBUG("[BUSY] Active[%d] Max[%d]",
 				active_count, DP_MAX_DOWNLOAD_AT_ONCE);
 			continue;
 		}
