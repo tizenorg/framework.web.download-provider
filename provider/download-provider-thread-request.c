@@ -998,7 +998,7 @@ static dp_error_type __dp_do_get_command(int sock, dp_command* cmd, dp_request *
 		TRACE_DEBUG("DP_CMD_GET_NOTIFICATION_BUNDLE");
 		dp_ipc_send_errorcode(sock, DP_ERROR_NONE);
 		if ((dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0)) {
-			TRACE_ERROR("DP_CMD_SET_NOTIFICATION_TYPE read fail");
+			TRACE_ERROR("DP_CMD_GET_NOTIFICATION_BUNDLE read fail");
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
 		}
@@ -1197,11 +1197,16 @@ static dp_error_type __dp_do_set_command(int sock, dp_command *cmd, dp_request *
 		errorcode = dp_request_set_filename(cmd->id, request, read_str);
 		break;
 	case DP_CMD_SET_NOTIFICATION_BUNDLE:
-		if ((bundle_length = dp_ipc_read_bundle(sock, &noti_bundle_type, &b_raw)) == 0) {
+		bundle_length = dp_ipc_read_bundle(sock, &noti_bundle_type, &b_raw);
+		if (bundle_length == 0) {
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
+		} else if (bundle_length == -1) {
+			errorcode = DP_ERROR_INVALID_PARAMETER;
+			break;
 		}
-		errorcode = dp_request_set_bundle(cmd->id, request, noti_bundle_type, b_raw, bundle_length);
+		errorcode = dp_request_set_bundle(cmd->id, request,
+				noti_bundle_type, b_raw, bundle_length);
 		break;
 	case DP_CMD_SET_NOTIFICATION_TITLE:
 		if ((read_str = dp_ipc_read_string(sock)) == NULL) {
@@ -1222,7 +1227,12 @@ static dp_error_type __dp_do_set_command(int sock, dp_command *cmd, dp_request *
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
 		}
-		errorcode = dp_request_set_noti_type(cmd->id, request, read_int);
+		if (read_int == DP_NOTIFICATION_TYPE_NONE ||
+				read_int == DP_NOTIFICATION_TYPE_COMPLETE_ONLY ||
+				read_int == DP_NOTIFICATION_TYPE_ALL)
+			errorcode = dp_request_set_noti_type(cmd->id, request, read_int);
+		else
+			errorcode = DP_ERROR_INVALID_PARAMETER;
 		break;
 	default:
 		is_checked = 0;
@@ -1303,7 +1313,7 @@ static dp_error_type __dp_do_set_command(int sock, dp_command *cmd, dp_request *
 		}
 		if (dp_db_get_cond_rows_count(cmd->id, DP_DB_TABLE_HTTP_HEADERS,
 				DP_DB_COL_HEADER_FIELD, DP_DB_COL_TYPE_TEXT,
-				read_str) < 0) {
+				read_str) <= 0) {
 			errorcode = DP_ERROR_NO_DATA;
 		} else {
 			if (dp_db_cond_remove(cmd->id, DP_DB_TABLE_HTTP_HEADERS,

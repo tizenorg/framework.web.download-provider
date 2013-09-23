@@ -130,6 +130,9 @@ char *dp_ipc_read_string(int fd)
 	return str;
 }
 
+
+// 0 : Socket Error
+// -1 : Invalid type
 unsigned dp_ipc_read_bundle(int fd, int *type, bundle_raw **b)
 {
 	unsigned length = 0;
@@ -149,10 +152,11 @@ unsigned dp_ipc_read_bundle(int fd, int *type, bundle_raw **b)
 		TRACE_STRERROR("[ERROR] read FD[%d] type[%d]", fd, type);
 		return 0;
 	}
-	if ((*type) < DP_NOTIFICATION_BUNDLE_TYPE_ONGOING||
-			(*type) > DP_NOTIFICATION_BUNDLE_TYPE_FAILED) {
+	if ((*type) != DP_NOTIFICATION_BUNDLE_TYPE_ONGOING &&
+			(*type) !=  DP_NOTIFICATION_BUNDLE_TYPE_COMPLETE &&
+			(*type) !=  DP_NOTIFICATION_BUNDLE_TYPE_FAILED) {
 		TRACE_ERROR("[NOTI TYPE] [%d]", *type);
-		return 0;
+		return -1;
 	}
 	// read flexible URL from client.
 	recv_bytes = read(fd, &length, sizeof(unsigned));
@@ -186,7 +190,7 @@ unsigned dp_ipc_read_bundle(int fd, int *type, bundle_raw **b)
 			remain_size = remain_size - (unsigned)recv_size;
 	} while (recv_size > 0 && remain_size > 0);
 
-	if (recv_size == 0) {
+	if (recv_size <= 0) {
 		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
 		bundle_free_encoded_rawdata(&b_raw);
 		return 0;

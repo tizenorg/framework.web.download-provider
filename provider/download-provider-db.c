@@ -1639,7 +1639,7 @@ int dp_db_get_cond_rows_count(int id, char *table,
 
 	ret = sqlite3_prepare_v2(g_dp_db_handle, query, -1, &stmt, NULL);
 	sqlite3_free(query);
-	if ( ret != SQLITE_OK) {
+	if (ret != SQLITE_OK) {
 		TRACE_ERROR("[PREPARE] [%s]", sqlite3_errmsg(g_dp_db_handle));
 		__dp_finalize(stmt);
 		return -1;

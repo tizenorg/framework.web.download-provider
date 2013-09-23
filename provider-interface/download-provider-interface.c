@@ -1312,8 +1312,17 @@ static dp_error_type __dp_interface_get_raw_bundle
 				*len = __ipc_read_bundle(fd, value);
 				if (*len <= 0)
 					errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
+			} else {
+				TRACE_ERROR("[ERROR] Fail to get result for sending type value]");
+				errorcode = DP_ERROR_IO_ERROR;
 			}
+		} else {
+			TRACE_ERROR("[ERROR] Fail to send type]");
+			errorcode = DP_ERROR_IO_ERROR;
 		}
+	} else {
+		TRACE_ERROR("[ERROR] Fail to send command]");
+		errorcode = DP_ERROR_IO_ERROR;
 	}
 	pthread_mutex_unlock(&g_interface_info->mutex);
 	if (errorcode == DP_ERROR_IO_ERROR)
@@ -2083,13 +2092,18 @@ int dp_interface_set_notification_bundle(const int id, int type, bundle *b)
 
 int dp_interface_get_notification_bundle(const int id, int type, bundle **b)
 {
-	bundle *b_loc = NULL;
 	bundle_raw *r = NULL;
 	int len = 0;
-	dp_error_type error = __dp_interface_get_raw_bundle(id, DP_CMD_GET_NOTIFICATION_BUNDLE, type, &r, &len);
-	if (error == DP_ERROR_NONE) {
-		b_loc = bundle_decode_raw(r, len);
-		*b = b_loc;
+	dp_error_type error;
+
+	if (b == NULL) {
+		TRACE_ERROR("[CHECK bundle] (%d)", id);
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+
+	error = __dp_interface_get_raw_bundle(id, DP_CMD_GET_NOTIFICATION_BUNDLE, type, &r, &len);
+	if (error == DOWNLOAD_ADAPTOR_ERROR_NONE) {
+		*b = bundle_decode_raw(r, len);
 	}
 	bundle_free_encoded_rawdata(&r);
 	return error;
