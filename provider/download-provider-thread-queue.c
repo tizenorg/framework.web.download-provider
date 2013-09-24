@@ -156,7 +156,6 @@ static void *__request_download_start_agent(void *args)
 		// call agent start function
 		errcode = dp_start_agent_download(request_slot);
 	}
-
 	// send to state callback.
 	if (errcode == DP_ERROR_NONE) {
 		// CONNECTING
@@ -175,18 +174,27 @@ static void *__request_download_start_agent(void *args)
 		// FAILED
 		request->state = DP_STATE_FAILED;
 		request->error = DP_ERROR_CONNECTION_FAILED;
-		dp_ipc_send_event(request->group->event_socket,
-			request->id, request->state, request->error, 0);
+		if (request->group != NULL &&
+			request->group->event_socket >= 0) {
+			dp_ipc_send_event(request->group->event_socket,
+				request->id, request->state, request->error, 0);
+		}
 	} else if (errcode == DP_ERROR_INVALID_STATE) {
 		// API FAILED
 		request->error = DP_ERROR_INVALID_STATE;
-		dp_ipc_send_event(request->group->event_socket,
-			request->id, request->state, request->error, 0);
+		if (request->group != NULL &&
+			request->group->event_socket >= 0) {
+			dp_ipc_send_event(request->group->event_socket,
+				request->id, request->state, request->error, 0);
+		}
 	} else {
 		request->state = DP_STATE_FAILED;
 		request->error = errcode;
-		dp_ipc_send_event(request->group->event_socket,
-			request->id, request->state, request->error, 0);
+		if (request->group != NULL &&
+			request->group->event_socket >= 0) {
+			dp_ipc_send_event(request->group->event_socket,
+				request->id, request->state, request->error, 0);
+		}
 	}
 	if (dp_db_request_update_status(request->id, request->state, request->error) < 0) {
 		TRACE_ERROR("[ERROR][%d][SQL]", request->id);
