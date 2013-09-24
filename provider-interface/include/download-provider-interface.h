@@ -79,21 +79,6 @@ typedef enum
 	DOWNLOAD_ADAPTOR_ERROR_IO_ERROR = TIZEN_ERROR_IO_ERROR , /**< Internal I/O error */
 } download_adaptor_error_e;
 
-typedef enum {
-	DOWNLOAD_ADAPTOR_NOTIFICATION_TYPE_NONE = 0, // Not register Noti.
-	DOWNLOAD_ADAPTOR_NOTIFICATION_TYPE_COMPLETE_ONLY, // Success, Failed
-	DOWNLOAD_ADAPTOR_NOTIFICATION_TYPE_ALL // Ongoing, Success, Failed
-} download_adaptor_notification_type;
-
-typedef enum {
-	DOWNLOAD_ADAPTOR_NOTIFICATION_BUNDLE_TYPE_ONGOING = 0, // Ongoing, Failed
-	DOWNLOAD_ADAPTOR_NOTIFICATION_BUNDLE_TYPE_COMPLETE, // Completed
-	DOWNLOAD_ADAPTOR_NOTIFICATION_BUNDLE_TYPE_FAILED, // Failed
-} download_adaptor_notification_bundle_type;
-
-// sync with url-download
-
-
 // sync types with url-download..
 typedef void (*dp_interface_state_changed_cb) (int id, int state, void *user_data);
 typedef void (*dp_interface_progress_cb) (int id, unsigned long long received, void *user_data);

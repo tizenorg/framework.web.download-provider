@@ -95,18 +95,6 @@ typedef enum {
 	DP_CMD_LAST_SECT = 400
 } dp_command_type;
 
-typedef enum {
-	DP_NOTIFICATION_BUNDLE_TYPE_ONGOING = 0, // Ongoing, Failed
-	DP_NOTIFICATION_BUNDLE_TYPE_COMPLETE, // Completed
-	DP_NOTIFICATION_BUNDLE_TYPE_FAILED // Failed
-} dp_notification_bundle_type;
-
-typedef enum {
-	DP_NOTIFICATION_TYPE_NONE = 0, // Not register Noti.
-	DP_NOTIFICATION_TYPE_COMPLETE_ONLY, // Success, Failed
-	DP_NOTIFICATION_TYPE_ALL // Ongoing, Success, Failed
-} dp_notification_type;
-
 typedef struct {
 	unsigned int length;
 	char *str;

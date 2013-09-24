@@ -23,6 +23,8 @@
 #include "notification.h"
 #include "appsvc.h"
 
+#include "download-provider-defs.h"
+
 #include "download-provider-notification.h"
 #include "download-provider-request.h"
 #include "download-provider-db.h"
