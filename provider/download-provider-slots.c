@@ -167,10 +167,8 @@ int dp_get_request_count(dp_request_slots *slots)
 		return -1;
 
 	for (i = 0; i < DP_MAX_REQUEST; i++) {
-		CLIENT_MUTEX_LOCK(&slots[i].mutex);
 		if (slots[i].request != NULL)
 			count++;
-		CLIENT_MUTEX_UNLOCK(&slots[i].mutex);
 	}
 	return count;
 }

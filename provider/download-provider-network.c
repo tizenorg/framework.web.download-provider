@@ -360,7 +360,8 @@ void dp_network_connection_destroy(connection_h connection)
 	wifi_direct_deinitialize();
 #endif
 
-	connection_unset_type_changed_cb (connection);
+	connection_unset_type_changed_cb(connection);
+	connection_unset_ip_address_changed_cb(connection);
 	connection_destroy(connection);
 }
 
