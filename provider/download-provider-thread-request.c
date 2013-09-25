@@ -1154,7 +1154,14 @@ static dp_error_type __dp_do_set_command(int sock, dp_command *cmd, dp_request *
 			errorcode = DP_ERROR_IO_ERROR;
 			break;
 		}
-		errorcode = dp_request_set_network_type(cmd->id, request, read_int);
+		if (read_int == DP_NETWORK_TYPE_ALL ||
+				read_int == DP_NETWORK_TYPE_WIFI ||
+				read_int == DP_NETWORK_TYPE_DATA_NETWORK ||
+				read_int == DP_NETWORK_TYPE_ETHERNET ||
+				read_int == DP_NETWORK_TYPE_WIFI_DIRECT)
+			errorcode = dp_request_set_network_type(cmd->id, request, read_int);
+		else
+			errorcode = DP_ERROR_INVALID_PARAMETER;
 		break;
 	case DP_CMD_SET_AUTO_DOWNLOAD:
 		if (dp_ipc_read_custom_type(sock, &read_int, sizeof(int)) < 0) {

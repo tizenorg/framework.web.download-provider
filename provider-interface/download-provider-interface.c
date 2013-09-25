@@ -140,10 +140,12 @@ static int __dp_interface_convert_network_adaptor(int type)
 		return DP_NETWORK_TYPE_DATA_NETWORK;
 	case DOWNLOAD_ADAPTOR_NETWORK_WIFI_DIRECT:
 		return DP_NETWORK_TYPE_WIFI_DIRECT;
+	case DOWNLOAD_ADAPTOR_NETWORK_ALL:
+		return DP_NETWORK_TYPE_ALL;
 	default:
 		break;
 	}
-	return DP_NETWORK_TYPE_ALL;
+	return type;
 }
 
 static int __dp_interface_convert_network_provider(int type)
@@ -155,10 +157,12 @@ static int __dp_interface_convert_network_provider(int type)
 		return DOWNLOAD_ADAPTOR_NETWORK_DATA_NETWORK;
 	case DP_NETWORK_TYPE_WIFI_DIRECT:
 		return DOWNLOAD_ADAPTOR_NETWORK_WIFI_DIRECT;
+	case DOWNLOAD_ADAPTOR_NETWORK_ALL:
+		return DP_NETWORK_TYPE_ALL;
 	default:
 		break;
 	}
-	return DOWNLOAD_ADAPTOR_NETWORK_ALL;
+	return type;
 }
 
 static int __dp_interface_convert_state(int state)
