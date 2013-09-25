@@ -39,6 +39,8 @@
 #include "download-agent-defs.h"
 #include "download-agent-interface.h"
 
+#define DP_SDCARD_MNT_POINT "/opt/storage/sdcard"
+
 static void *g_da_handle = NULL;
 static int (*download_agent_init)(da_client_cb_t *) = NULL; // int da_init(da_client_cb_t *da_client_callback);
 static int (*download_agent_deinit)() = NULL; //  int da_deinit();
@@ -443,7 +445,11 @@ static void __finished_cb(user_finished_info_t *info, void *user_data)
 		char *content_name = NULL;
 		if (info->saved_path != NULL) {
 			char *str = NULL;
-			errorcode = __set_file_permission_to_client(request, info->saved_path);
+			if(!(strncmp(DP_SDCARD_MNT_POINT, info->saved_path,
+				strlen(DP_SDCARD_MNT_POINT)) == 0)) {
+				errorcode = __set_file_permission_to_client(request,
+					info->saved_path);
+			}
 			str = strrchr(info->saved_path, '/');
 			if (str != NULL) {
 				str++;
