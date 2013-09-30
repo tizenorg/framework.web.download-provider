@@ -676,14 +676,14 @@ static int __clear_interface()
 static int __disconnect_from_provider()
 {
 	TRACE_DEBUG("");
-	__clear_interface();
 	if (g_interface_event_thread_id > 0 &&
 			pthread_kill(g_interface_event_thread_id, 0) != ESRCH) {
 		if (pthread_cancel(g_interface_event_thread_id) != 0) {
-			TRACE_STRERROR("pthread:%d", g_interface_event_thread_id);
+			TRACE_STRERROR("pthread:%d", (int)g_interface_event_thread_id);
 		}
 		g_interface_event_thread_id = 0;
 	}
+	__clear_interface();
 	return DP_ERROR_NONE;
 }
 
@@ -727,12 +727,6 @@ static dp_error_type __ipc_check_ready_status(int fd)
 	return errorcode;
 }
 
-static void __event_manager_clean_up(void *arg)
-{
-	TRACE_DEBUG("thread end by pthread_cancel");
-	g_interface_event_thread_id = 0; // set 0 to not call pthread_cancel
-	__clear_interface();
-}
 // listen ASYNC state event, no timeout
 static void *__dp_interface_event_manager(void *arg)
 {
@@ -752,7 +746,6 @@ static void *__dp_interface_event_manager(void *arg)
 	// deferred wait to cancal until next function called.
 	// ex) function : select, read in this thread
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
-	pthread_cleanup_push(__event_manager_clean_up, (void *)NULL);
 
 	maxfd = g_interface_info->event_socket;
 	FD_ZERO(&read_fdset);
@@ -784,10 +777,9 @@ static void *__dp_interface_event_manager(void *arg)
 				// failed to read from socket // ignore this status
 				free(eventinfo);
 				TRACE_STRERROR("[CRITICAL] Can not read Event packet");
-				if (__get_standard_errorcode(DP_ERROR_IO_ERROR) ==
-						DP_ERROR_IO_ERROR) // if not timeout. end thread
-					break;
-				continue;
+				g_interface_event_thread_id = 0;
+				__clear_interface();
+				return 0;
 			}
 
 			if ((index = __get_my_slot_index(eventinfo->id)) < 0) {
@@ -827,14 +819,13 @@ static void *__dp_interface_event_manager(void *arg)
 
 	FD_CLR(sock, &read_fdset);
 	g_interface_event_thread_id = 0; // set 0 to not call pthread_cancel
-	__clear_interface();
 	TRACE_DEBUG("thread end by itself");
-	pthread_cleanup_pop(0);
 	return 0;
 }
 
 static int __connect_to_provider()
 {
+	pthread_mutex_lock(&g_clear_mutex);
 	if (g_interface_info == NULL) {
 
 		g_interface_info =
@@ -854,6 +845,7 @@ static int __connect_to_provider()
 			TRACE_STRERROR("[CRITICAL] connect system error");
 			free(g_interface_info);
 			g_interface_info = NULL;
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 		// send a command
@@ -862,6 +854,7 @@ static int __connect_to_provider()
 			close(g_interface_info->cmd_socket);
 			free(g_interface_info);
 			g_interface_info = NULL;
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 #ifndef SO_PEERCRED
@@ -870,18 +863,21 @@ static int __connect_to_provider()
 			close(g_interface_info->cmd_socket);
 			free(g_interface_info);
 			g_interface_info = NULL;
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 		if (__ipc_send_int(g_interface_info->cmd_socket, getuid()) < 0) {
 			close(g_interface_info->cmd_socket);
 			free(g_interface_info);
 			g_interface_info = NULL;
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 		if (__ipc_send_int(g_interface_info->cmd_socket, getgid()) < 0) {
 			close(g_interface_info->cmd_socket);
 			free(g_interface_info);
 			g_interface_info = NULL;
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 #endif
@@ -891,6 +887,7 @@ static int __connect_to_provider()
 			close(g_interface_info->cmd_socket);
 			free(g_interface_info);
 			g_interface_info = NULL;
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 		// send a command
@@ -900,6 +897,7 @@ static int __connect_to_provider()
 			close(g_interface_info->event_socket);
 			free(g_interface_info);
 			g_interface_info = NULL;
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 #ifndef SO_PEERCRED
@@ -910,6 +908,7 @@ static int __connect_to_provider()
 			close(g_interface_info->event_socket);
 			free(g_interface_info);
 			g_interface_info = NULL;
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 #endif
@@ -918,32 +917,34 @@ static int __connect_to_provider()
 		if (ret != 0) {
 			TRACE_STRERROR("ERR:pthread_mutex_init FAIL with %d.", ret);
 			__clear_interface();
+			pthread_mutex_unlock(&g_clear_mutex);
 			return DP_ERROR_IO_ERROR;
 		}
 
-		if (g_interface_event_thread_id <= 0) {
-			// create thread here ( getting event_socket )
-			pthread_attr_t thread_attr;
-			if (pthread_attr_init(&thread_attr) != 0) {
-				TRACE_STRERROR("[CRITICAL] pthread_attr_init");
-				__disconnect_from_provider();
-				return DP_ERROR_IO_ERROR;
-			}
-			if (pthread_attr_setdetachstate(&thread_attr,
-				PTHREAD_CREATE_DETACHED) != 0) {
-				TRACE_STRERROR
-					("[CRITICAL] pthread_attr_setdetachstate");
-				__disconnect_from_provider();
-				return DP_ERROR_IO_ERROR;
-			}
-			if (pthread_create(&g_interface_event_thread_id,
-					&thread_attr, __dp_interface_event_manager,
-					g_interface_info) != 0) {
-				TRACE_STRERROR("[CRITICAL] pthread_create");
-				__clear_interface();
-				g_interface_event_thread_id = 0;
-				return DP_ERROR_IO_ERROR;
-			}
+	}
+	pthread_mutex_unlock(&g_clear_mutex);
+	if (g_interface_event_thread_id <= 0) {
+		// create thread here ( getting event_socket )
+		pthread_attr_t thread_attr;
+		if (pthread_attr_init(&thread_attr) != 0) {
+			TRACE_STRERROR("[CRITICAL] pthread_attr_init");
+			__disconnect_from_provider();
+			return DP_ERROR_IO_ERROR;
+		}
+		if (pthread_attr_setdetachstate(&thread_attr,
+			PTHREAD_CREATE_DETACHED) != 0) {
+			TRACE_STRERROR
+				("[CRITICAL] pthread_attr_setdetachstate");
+			__disconnect_from_provider();
+			return DP_ERROR_IO_ERROR;
+		}
+		if (pthread_create(&g_interface_event_thread_id,
+				&thread_attr, __dp_interface_event_manager,
+				g_interface_info) != 0) {
+			TRACE_STRERROR("[CRITICAL] pthread_create");
+			__clear_interface();
+			g_interface_event_thread_id = 0;
+			return DP_ERROR_IO_ERROR;
 		}
 	}
 	return DP_ERROR_NONE;
