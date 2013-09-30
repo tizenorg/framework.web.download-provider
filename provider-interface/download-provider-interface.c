@@ -125,6 +125,7 @@ typedef struct {
 dp_interface_info *g_interface_info = NULL;
 dp_interface_slot g_interface_slots[MAX_DOWNLOAD_HANDLE];
 static pthread_mutex_t g_function_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_clear_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t g_interface_event_thread_id = 0;
 
 //////////// defines functions /////////////////
@@ -654,8 +655,10 @@ static int __create_socket()
 	return sockfd;
 }
 
-static int __disconnect_from_provider()
+static int __clear_interface()
 {
+	TRACE_DEBUG("");
+	pthread_mutex_lock(&g_clear_mutex);
 	if (g_interface_info != NULL) {
 		shutdown(g_interface_info->cmd_socket, 0);
 		close(g_interface_info->cmd_socket);
@@ -667,8 +670,18 @@ static int __disconnect_from_provider()
 		free(g_interface_info);
 		g_interface_info = NULL;
 	}
-	if (g_interface_event_thread_id > 0) {
-		pthread_cancel(g_interface_event_thread_id);
+	pthread_mutex_unlock(&g_clear_mutex);
+}
+
+static int __disconnect_from_provider()
+{
+	TRACE_DEBUG("");
+	__clear_interface();
+	if (g_interface_event_thread_id > 0 &&
+			pthread_kill(g_interface_event_thread_id, 0) != ESRCH) {
+		if (pthread_cancel(g_interface_event_thread_id) != 0) {
+			TRACE_STRERROR("pthread:%d", g_interface_event_thread_id);
+		}
 		g_interface_event_thread_id = 0;
 	}
 	return DP_ERROR_NONE;
@@ -714,6 +727,12 @@ static dp_error_type __ipc_check_ready_status(int fd)
 	return errorcode;
 }
 
+static void __event_manager_clean_up(void *arg)
+{
+	TRACE_DEBUG("thread end by pthread_cancel");
+	g_interface_event_thread_id = 0; // set 0 to not call pthread_cancel
+	__clear_interface();
+}
 // listen ASYNC state event, no timeout
 static void *__dp_interface_event_manager(void *arg)
 {
@@ -730,13 +749,16 @@ static void *__dp_interface_event_manager(void *arg)
 		return 0;
 	}
 
-	// deferred wait to cencal until next function called.
+	// deferred wait to cancal until next function called.
 	// ex) function : select, read in this thread
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
+	pthread_cleanup_push(__event_manager_clean_up, (void *)NULL);
 
 	maxfd = g_interface_info->event_socket;
 	FD_ZERO(&read_fdset);
 	FD_SET(g_interface_info->event_socket, &read_fdset);
+
+	int sock = g_interface_info->event_socket;
 
 	while(g_interface_info != NULL
 			&& g_interface_info->event_socket >= 0) {
@@ -752,27 +774,16 @@ static void *__dp_interface_event_manager(void *arg)
 				("[CRITICAL] [CHECK TID] SELF ID [%d] Global ID (%d)",
 				pthread_self(), g_interface_event_thread_id);
 			// another thread may work. just terminate
-			return 0;
+			break;
 		}
 
-		pthread_mutex_lock(&g_function_mutex);
-
-		if (g_interface_info == NULL
-			|| g_interface_info->event_socket < 0) {
-			TRACE_ERROR("[CRITICAL] IPC BROKEN Ending Event Thread");
-			pthread_mutex_unlock(&g_function_mutex);
-			// disconnected by main thread. just terminate
-			return 0;
-		}
-
-		if (FD_ISSET(g_interface_info->event_socket, &rset) > 0) {
+		if (FD_ISSET(sock, &rset) > 0) {
 			// read state info from socket
-			eventinfo = __ipc_event(g_interface_info->event_socket);
+			eventinfo = __ipc_event(sock);
 			if (eventinfo == NULL || eventinfo->id <= 0) {
 				// failed to read from socket // ignore this status
 				free(eventinfo);
 				TRACE_STRERROR("[CRITICAL] Can not read Event packet");
-				pthread_mutex_unlock(&g_function_mutex);
 				if (__get_standard_errorcode(DP_ERROR_IO_ERROR) ==
 						DP_ERROR_IO_ERROR) // if not timeout. end thread
 					break;
@@ -783,15 +794,11 @@ static void *__dp_interface_event_manager(void *arg)
 				TRACE_ERROR("[CRITICAL] not found slot for [%d]",
 					eventinfo->id);
 				free(eventinfo);
-				pthread_mutex_unlock(&g_function_mutex);
 				continue;
 			}
 
-			pthread_mutex_unlock(&g_function_mutex);
-
-			// begin protect callback sections
+			// begin protect callback sections & thread safe
 			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-
 			dp_interface_callback *callback =
 				&g_interface_slots[index].callback;
 
@@ -814,22 +821,15 @@ static void *__dp_interface_event_manager(void *arg)
 				}
 			}
 			free(eventinfo);
-
-			// end protect callback sections
-			pthread_setcancelstate (PTHREAD_CANCEL_ENABLE,  NULL);
-			continue;
+			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 		}
-		pthread_mutex_unlock(&g_function_mutex);
 	} // while
 
-	FD_CLR(g_interface_info->event_socket, &read_fdset);
-
-	TRACE_DEBUG("Terminate Event Thread");
-	pthread_mutex_lock(&g_function_mutex);
-	TRACE_DEBUG("Disconnect All Connection");
+	FD_CLR(sock, &read_fdset);
 	g_interface_event_thread_id = 0; // set 0 to not call pthread_cancel
-	__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
+	__clear_interface();
+	TRACE_DEBUG("thread end by itself");
+	pthread_cleanup_pop(0);
 	return 0;
 }
 
@@ -917,7 +917,7 @@ static int __connect_to_provider()
 		int ret = pthread_mutex_init(&g_interface_info->mutex, NULL);
 		if (ret != 0) {
 			TRACE_STRERROR("ERR:pthread_mutex_init FAIL with %d.", ret);
-			__disconnect_from_provider();
+			__clear_interface();
 			return DP_ERROR_IO_ERROR;
 		}
 
@@ -940,7 +940,8 @@ static int __connect_to_provider()
 					&thread_attr, __dp_interface_event_manager,
 					g_interface_info) != 0) {
 				TRACE_STRERROR("[CRITICAL] pthread_create");
-				__disconnect_from_provider();
+				__clear_interface();
+				g_interface_event_thread_id = 0;
 				return DP_ERROR_IO_ERROR;
 			}
 		}
