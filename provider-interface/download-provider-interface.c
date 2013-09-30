@@ -47,9 +47,9 @@
 	errorcode = __ipc_check_ready_status(g_interface_info->cmd_socket);\
 	if (errorcode != DP_ERROR_NONE) {\
 		pthread_mutex_unlock(&g_interface_info->mutex);\
-		pthread_mutex_unlock(&g_function_mutex);\
 		if (errorcode == DP_ERROR_IO_ERROR)\
 			__disconnect_from_provider();\
+		pthread_mutex_unlock(&g_function_mutex);\
 		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;\
 	}\
 } while(0)
@@ -310,7 +310,7 @@ static dp_error_type __get_standard_errorcode(dp_error_type basecode)
 		errorcode = DP_ERROR_IO_EAGAIN;
 	} else if (errno == EINTR) {
 		TRACE_ERROR("[EINTR] Interrupted System Call [%d]", errno);
-		errorcode = DP_ERROR_IO_EINTR;
+		errorcode = DP_ERROR_IO_ERROR;
 	}
 	return errorcode;
 }
