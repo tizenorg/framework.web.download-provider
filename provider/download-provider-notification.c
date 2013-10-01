@@ -423,6 +423,7 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 				}
 			}
 		} else {
+			char *file_path = NULL;
 			b = bundle_create();
 			if (!b) {
 				TRACE_ERROR("[FAIL] create bundle");
@@ -435,6 +436,23 @@ int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, d
 				notification_free(noti_handle);
 				return -1;
 			}
+			file_path = dp_db_get_text_column
+					(id, DP_DB_TABLE_DOWNLOAD_INFO, DP_DB_COL_SAVED_PATH);
+			if (file_path == NULL) {
+				TRACE_ERROR("[FAIL] get file path");
+				bundle_free(b);
+				notification_free(noti_handle);
+				return -1;
+
+			}
+			if (appsvc_set_uri(b, file_path) != APPSVC_RET_OK) {
+				TRACE_ERROR("[FAIL] appsvc set uri");
+				bundle_free(b);
+				notification_free(noti_handle);
+				free(file_path);
+				return -1;
+			}
+			free(file_path);
 			err = notification_set_execute_option(noti_handle,
 				NOTIFICATION_EXECUTE_TYPE_SINGLE_LAUNCH, "View", NULL, b);
 			if (err != NOTIFICATION_ERROR_NONE) {
