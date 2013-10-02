@@ -655,7 +655,7 @@ static int __create_socket()
 	return sockfd;
 }
 
-static int __clear_interface()
+static void __clear_interface()
 {
 	TRACE_DEBUG("");
 	pthread_mutex_lock(&g_clear_mutex);
