@@ -2100,7 +2100,7 @@ int dp_interface_get_notification_bundle(const int id, int type, bundle **b)
 {
 	bundle_raw *r = NULL;
 	int len = 0;
-	dp_error_type error;
+	download_adaptor_error_e error = DOWNLOAD_ADAPTOR_ERROR_NONE;
 
 	if (b == NULL) {
 		TRACE_ERROR("[CHECK bundle] (%d)", id);
