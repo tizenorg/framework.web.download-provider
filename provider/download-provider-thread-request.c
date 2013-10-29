@@ -2098,7 +2098,8 @@ void *dp_thread_requests_manager(void *arg)
 						request->state == DP_STATE_FAILED &&
 						request->error == DP_ERROR_CONNECTION_FAILED) {
 					if (dp_get_network_connection_instant_status() !=
-							DP_NETWORK_TYPE_OFF) {
+							DP_NETWORK_TYPE_OFF &&
+							request->ip_changed == 1) {
 						TRACE_DEBUG("[RESUME][%d] will be queued",
 							request->id);
 						request->state = DP_STATE_QUEUED;
