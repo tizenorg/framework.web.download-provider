@@ -1,6 +1,6 @@
 Name:       download-provider
 Summary:    download the contents in background.
-Version:    1.1.5
+Version:    1.1.6
 Release:    0
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
