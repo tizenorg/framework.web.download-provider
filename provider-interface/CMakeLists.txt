@@ -8,7 +8,7 @@ IF("${CMAKE_BUILD_TYPE}" STREQUAL "")
 ENDIF("${CMAKE_BUILD_TYPE}" STREQUAL "")
 MESSAGE("Build type: ${CMAKE_BUILD_TYPE}")
 
-SET(PC_REQUIRED "glib-2.0 gobject-2.0 dlog capi-base-common capi-appfw-app-manager bundle")
+SET(PC_REQUIRED "glib-2.0 gobject-2.0 dlog capi-base-common capi-appfw-app-manager capi-appfw-application bundle")
 
 INCLUDE(FindPkgConfig)
 
@@ -32,7 +32,12 @@ SET(PROVIDER_INTERFACE_LINK_LIBRARIES
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
 SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -Wall")
 
+ADD_DEFINITIONS(-DDOWNLOAD_PROVIDER_LOG_TAG=\"DOWNLOAD_PROVIDER_INTERFACE\")
+
 ADD_LIBRARY(${PROJECT_NAME} SHARED
+	${CMAKE_SOURCE_DIR}/provider/download-provider-utils.c
+	${CMAKE_SOURCE_DIR}/provider/download-provider-ipc.c
+	${CMAKE_SOURCE_DIR}/provider/download-provider-pthread.c
 	${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.c )
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${provider_interface_pkgs_LDFLAGS} ${PROVIDER_INTERFACE_LINK_LIBRARIES})
 SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES VERSION ${PKG_VERSION})

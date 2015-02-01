@@ -14,81 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef DOWNLOAD_PROVIDER2_PTHREAD_H
-#define DOWNLOAD_PROVIDER2_PTHREAD_H
+#ifndef DOWNLOAD_PROVIDER_PTHREAD_H
+#define DOWNLOAD_PROVIDER_PTHREAD_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <unistd.h>
 #include <pthread.h>
-#include <errno.h>
 
 // download-provider use default style mutex.
+int dp_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr);
+void dp_mutex_lock(pthread_mutex_t *mutex, const char *func, int line);
+int dp_mutex_check_lock(pthread_mutex_t *mutex, const char *func, int line);
+int dp_mutex_trylock(pthread_mutex_t *mutex, const char *func, int line);
+int dp_mutex_timedlock(pthread_mutex_t *mutex, int sec, const char *func, int line);
+void dp_mutex_unlock(pthread_mutex_t *mutex, const char *func, int line);
+void dp_mutex_destroy(pthread_mutex_t *mutex);
 
-#define CLIENT_MUTEX_LOCK(mutex_add) {\
-	int ret = 0;\
-	ret = pthread_mutex_lock(mutex_add);\
-	if (EINVAL == ret) {\
-		TRACE_STRERROR("ERR:pthread_mutex_lock FAIL with EINVAL.");\
-	} else if (EDEADLK == ret) {\
-		TRACE_STRERROR("ERR:pthread_mutex_lock FAIL with EDEADLK.");\
-	} else if (ret != 0) {\
-		TRACE_STRERROR("ERR:pthread_mutex_lock FAIL with %d.", ret);\
-	} \
-}
-
-#define CLIENT_MUTEX_UNLOCK(mutex_add) {\
-	int ret = 0;\
-	ret = pthread_mutex_unlock(mutex_add);\
-	if (EINVAL == ret) {\
-		TRACE_STRERROR("ERR:pthread_mutex_unlock FAIL with EINVAL.");\
-	} else if (EDEADLK == ret) {\
-		TRACE_STRERROR("ERR:pthread_mutex_unlock FAIL with EDEADLK.");\
-	} else if (ret != 0) {\
-		TRACE_STRERROR("ERR:pthread_mutex_unlock FAIL with %d.", ret);\
-	} \
-}
-
-#define CLIENT_MUTEX_DESTROY(mutex_add) { \
-	int ret = 0; \
-	ret = pthread_mutex_destroy(mutex_add); \
-	if(EINVAL == ret) {\
-		TRACE_STRERROR("ERR:pthread_mutex_destroy FAIL with EINVAL."); \
-	} else if(ENOMEM == ret) {\
-		TRACE_STRERROR("ERR:pthread_mutex_destroy FAIL with ENOMEM."); \
-	} else if(EBUSY == ret) {\
-		TRACE_STRERROR("ERR:pthread_mutex_destroy FAIL with EBUSY."); \
-		if (pthread_mutex_unlock(mutex_add) == 0) \
-			pthread_mutex_destroy(mutex_add); \
-	} else if (ret != 0) {\
-		TRACE_STRERROR("ERR:pthread_mutex_destroy FAIL with %d.", ret); \
-	} \
-}
-
-#define CLIENT_MUTEX_INIT(mutex_add, attr) { \
-	int ret = 0; \
-	unsigned retry = 3; \
-	while (retry > 0) { \
-		ret = pthread_mutex_init(mutex_add, attr); \
-		if (0 == ret) { \
-			break; \
-		} else if(EINVAL == ret) { \
-			TRACE_STRERROR("ERR:pthread_mutex_init FAIL with EINVAL."); \
-		} else if(ENOMEM == ret) { \
-			TRACE_STRERROR("ERR:pthread_mutex_init FAIL with ENOMEM."); \
-			usleep(1000); \
-		} else if(EBUSY == ret) {\
-			TRACE_STRERROR("ERR:pthread_mutex_destroy FAIL with EBUSY."); \
-			if (pthread_mutex_unlock(mutex_add) == 0) \
-				pthread_mutex_destroy(mutex_add); \
-		} else if (ret != 0) { \
-			TRACE_STRERROR("ERR:pthread_mutex_init FAIL with %d.", ret); \
-		} \
-		retry--; \
-	} \
-}
+#define CLIENT_MUTEX_LOCK(mutex) dp_mutex_lock(mutex, __FUNCTION__, __LINE__)
+#define CLIENT_MUTEX_CHECKLOCK(mutex) dp_mutex_check_lock(mutex, __FUNCTION__, __LINE__)
+#define CLIENT_MUTEX_TRYLOCK(mutex) dp_mutex_trylock(mutex, __FUNCTION__, __LINE__)
+#define CLIENT_MUTEX_TIMEDLOCK(mutex, sec) dp_mutex_timedlock(mutex, sec, __FUNCTION__, __LINE__)
+#define CLIENT_MUTEX_UNLOCK(mutex) dp_mutex_unlock(mutex, __FUNCTION__, __LINE__)
 
 #ifdef __cplusplus
 }

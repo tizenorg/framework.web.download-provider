@@ -19,9 +19,12 @@
 
 #include "download-agent-type.h"
 #include "download-agent-interface.h"
-#include "download-agent-utils.h"
 
-da_result_t get_user_agent_string(char **uagent_str);
+da_ret_t get_user_agent_string(char **uagent_str);
 char *get_proxy_address(void);
+#ifdef _RAF_SUPPORT
+//test code
+void get_smart_bonding_vconf();
+#endif
 
 #endif

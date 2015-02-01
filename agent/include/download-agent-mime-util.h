@@ -34,7 +34,15 @@ typedef struct {
 
 da_bool_t is_ambiguous_MIME_Type(const char *in_mime_type);
 da_bool_t da_get_extension_name_from_url(char *url, char **ext);
-da_result_t  da_mime_get_ext_name(char *mime, char **ext);
+da_ret_t  da_mime_get_ext_name(char *mime, char **ext);
 da_bool_t da_get_file_name_from_url(char *url, char **name) ;
 void delete_prohibited_char(char *szTarget, int str_len);
+da_ret_t  get_extension_from_mime_type(char *mime_type, char **extension);
+#ifdef _ENABLE_OMA_DRM
+da_bool_t is_content_drm_dcf(char *content_type);
+da_bool_t is_content_drm_dm(char *content_type);
+#endif
+
+
+
 #endif

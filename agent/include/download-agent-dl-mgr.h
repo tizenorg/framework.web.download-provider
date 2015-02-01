@@ -14,20 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef _Download_Agent_Dl_Mgr_H
-#define _Download_Agent_Dl_Mgr_H
+#ifndef _Download_Agent_Basic_H
+#define _Download_Agent_Basic_H
 
-#include "download-agent-type.h"
-#include "download-agent-dl-info-util.h"
+#include "download-agent-dl-info.h"
 
-da_result_t  cancel_download(int dl_id);
-da_result_t  suspend_download(int dl_id, da_bool_t is_enable_cb);
-da_result_t  resume_download (int dl_id);
+da_ret_t start_download(da_info_t *da_info);
+da_ret_t cancel_download(int dl_id, da_bool_t is_enable_cb);
+da_ret_t suspend_download(int dl_id, da_bool_t is_enable_cb);
+da_ret_t resume_download(int dl_id);
 
-da_result_t  requesting_download(stage_info *stage);
-da_result_t  handle_after_download(stage_info *stage);
-da_result_t  send_user_noti_and_finish_download_flow(
-		int slot_id, char *installed_path, char *etag);
-
-da_bool_t is_valid_download_id(int dl_id);
 #endif

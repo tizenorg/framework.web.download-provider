@@ -17,12 +17,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <glib-object.h>
-
-#ifdef _EFL_PLATFORM
-#include <vconf.h>
-#include <vconf-keys.h>
-#include <net_connection.h>
-#endif /* _EFL_PLATFORM */
+#include "vconf.h"
+#include "vconf-keys.h"
+#include "net_connection.h"
 
 #include "download-agent-plugin-conf.h"
 #include "download-agent-debug.h"
@@ -30,74 +27,58 @@
 
 #define DEFAULT_UA_STR "Mozilla/5.0 (Linux; U; Tizen 1.0; en-us) AppleWebKit/534.46 (KHTML, like Gecko) Mobile Tizen Browser/1.0"
 
-da_result_t __get_conf_string(const char *key, char **out_string);
-
-da_result_t __get_conf_string(const char *key, char **out_string)
+da_ret_t __get_conf_string(const char *key, char **out_string)
 {
-#ifdef _EFL_PLATFORM
 	if (!key || !out_string) {
-		DA_LOG_ERR(Default,"Invalid Argument");
+		DA_LOGE("Invalid Argument");
 		return DA_ERR_INVALID_ARGUMENT;
 	}
 
 	*out_string = vconf_get_str(key);
 	return DA_RESULT_OK;
-#else
-	if (out_string)
-		*out_string = NULL;
-
-	return DA_RESULT_OK;
-#endif
 }
 
-da_result_t get_user_agent_string(char **uagent_str)
+da_ret_t get_user_agent_string(char **uagent_str)
 {
-	da_result_t  ret = DA_RESULT_OK;
-#ifdef _EFL_PLATFORM
+	da_ret_t  ret = DA_RESULT_OK;
 	char *key = DA_NULL;
-#endif
 
-	DA_LOG_FUNC_LOGV(Default);
+	DA_LOGV("");
 
 	if (!uagent_str) {
-		DA_LOG_ERR(Default,"Invalid Argument");
+		DA_LOGE("Invalid Argument");
 		return DA_ERR_INVALID_ARGUMENT;
 	}
 
-#ifdef _EFL_PLATFORM
 	key = VCONFKEY_BROWSER_USER_AGENT;
 	ret = __get_conf_string(key, uagent_str);
 	if(ret == DA_RESULT_OK) {
 		if(*uagent_str) {
-			DA_SECURE_LOGD("getting uagent_str = \n%s", *uagent_str);
+//			DA_SECURE_LOGD("getting uagent_str = \n%s", *uagent_str);
 			return ret;
 		}
 	}
-	DA_LOG_ERR(Default,"No UA information from vconf !!");
+	DA_LOGI("No UA information from vconf !!");
 	*uagent_str = strdup(DEFAULT_UA_STR);
-	DA_LOG(Default,"Set default UA");
-#else
-	*uagent_str = strdup(DEFAULT_UA_STR);
-#endif
+	DA_LOGV("Set default UA");
 	return ret;
 }
 
 char *get_proxy_address(void)
 {
-#ifdef _EFL_PLATFORM
 	char *proxy = NULL;
 	char *proxyRet = NULL;
 	connection_h handle = NULL;
-    connection_address_family_e family = CONNECTION_ADDRESS_FAMILY_IPV4;
+	connection_address_family_e family = CONNECTION_ADDRESS_FAMILY_IPV4;
 
-    DA_LOG_FUNC_LOGV(Default);
+    DA_LOGV("");
     if (connection_create(&handle) < 0) {
-		DA_LOG_ERR(Default,"Fail to create connection handle");
+		DA_LOGE("Fail to create connection handle");
 		return NULL;
 	}
 
 	if (connection_get_proxy(handle, family, &proxyRet) < 0) {
-		DA_LOG_ERR(Default,"Fail to get proxy address");
+		DA_LOGE("Fail to get proxy address");
 		connection_destroy(handle);
 		return NULL;
 	}
@@ -112,11 +93,17 @@ char *get_proxy_address(void)
 	}
 
     if (connection_destroy(handle) < 0) {
-		DA_LOG_ERR(Default,"Fail to desctory connection handle");
+		DA_LOGE("Fail to desctory connection handle");
 		return NULL;
 	}
 	return NULL;
-#else
-	return NULL;
-#endif
 }
+#ifdef _RAF_SUPPORT
+// test code
+void get_smart_bonding_vconf()
+{
+	int ret = 0;
+	vconf_get_int("file/private/wifi/network_bonding", &ret);
+	DA_LOGI("Smart Bonding Vconf:%d", ret);
+}
+#endif

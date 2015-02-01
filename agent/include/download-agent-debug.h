@@ -14,94 +14,55 @@
  * limitations under the License.
  */
 
-#ifndef _Download_Agent_Debug_H
-#define _Download_Agent_Debug_H
+#ifndef _DOWNLOAD_AGENT_DEBUG_H
+#define _DOWNLOAD_AGENT_DEBUG_H
 
 #include "download-agent-type.h"
 
-#define DA_DEBUG_ENV_KEY "DOWNLOAD_AGENT_DEBUG"
-#define DA_DEBUG_CONFIG_FILE_PATH "/tmp/.download_agent.conf"
-
-#define IS_LOG_ON(channel) (DALogBitMap & (0x1<<(channel)))
-
-typedef enum {
-	Soup,
-	HTTPManager,
-	FileManager,
-	DRMManager,
-	DownloadManager,
-	ClientNoti,
-	HTTPMessageHandler,
-	Encoding,
-	QueueManager,
-	Parsing,
-	Thread,
-	Default,
-	DA_LOG_CHANNEL_MAX
-} da_log_channel;
-
-extern int DALogBitMap;
-
-da_result_t init_log_mgr(void);
-
-#ifdef NODEBUG
-	#define DA_LOG(channel, format, ...) ((void)0)
-	#define DA_LOG_CRITICAL(channel, format, ...) ((void)0)
-	#define DA_LOG_VERBOSE(channel, format, ...) ((void)0)
-	#define DA_LOG_ERR(channel, format, ...) ((void)0)
-	#define DA_LOG_FUNC_LOGD(channel, ...) ((void)0)
-	#define DA_LOG_FUNC_LOGV(channel, ...) ((void)0)
-	#define DA_SECURE_LOGD(format, ...) ((void)0)
-	#define DA_SECURE_LOGI(format, ...) ((void)0)
-	#define DA_SECURE_LOGE(format, ...) ((void)0)
-
-#else /* NODEBUG */
 #include <stdio.h>
 #include <stdarg.h>
 #include <pthread.h>
 
-#ifdef DA_DEBUG_USING_DLOG
-	#include <dlog.h>
+// ansi color
+#define COLOR_RED 		"\033[0;31m"
+#define COLOR_GREEN 	"\033[0;32m"
+#define COLOR_BROWN 	"\033[0;33m"
+#define COLOR_LIGHTBLUE "\033[0;37m"
+#define COLOR_END		"\033[0;m"
+
+#ifdef _ENABLE_DLOG
+#include <unistd.h>
+#include <syscall.h>
+#include <dlog.h>
+
 	#ifdef LOG_TAG
 	#undef LOG_TAG
 	#endif /*  LOG_TAG */
-	#define LOG_TAG "DOWNLOAD_AGENT"
 
-	#define DA_LOG(channel, format, ...) LOGI_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__)
-	#define DA_LOG_DEBUG(channel, format, ...) LOGD_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__)
-	#define DA_LOG_CRITICAL(channel, format, ...) LOGI_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__)
-	#define DA_LOG_VERBOSE(channel, format, ...) ((void)0)//LOGD_IF(IS_LOG_ON(channel), format, ##__VA_ARGS__)
-	#define DA_LOG_ERR(channel, format, ...) LOGE_IF(IS_LOG_ON(channel), "ERR! "format, ##__VA_ARGS__)
-	#define DA_LOG_FUNC_LOGD(channel, ...) LOGD_IF(IS_LOG_ON(channel), "starting...")
-	#define DA_LOG_FUNC_LOGV(channel, ...) ((void)0)//LOGD_IF(IS_LOG_ON(channel), "starting...")
-	#define DA_SECURE_LOGD(format, ...) SECURE_LOGD(format, ##__VA_ARGS__)
-	#define DA_SECURE_LOGI(format, ...) SECURE_LOGI(format, ##__VA_ARGS__)
-	#define DA_SECURE_LOGE(format, ...) SECURE_LOGE(format, ##__VA_ARGS__)
-#else /* DA_DEBUG_USING_DLOG */
-	#include <unistd.h>
-	#include <syscall.h>
+	#define LOG_TAG "DP_DA"
+	#define DA_LOGV(format, ...) ((void)0)//LOGD("[%d]:"format, syscall(__NR_gettid), ##__VA_ARGS__)
+	#define DA_LOGD(format, ...) LOGD(COLOR_LIGHTBLUE "[%d]:"format COLOR_END, syscall(__NR_gettid), ##__VA_ARGS__)
+	#define DA_LOGI(format, ...) LOGI(COLOR_BROWN "[%d]:"format COLOR_END, syscall(__NR_gettid), ##__VA_ARGS__)
+	#define DA_LOGE(format, ...) LOGE(COLOR_RED "[%d]:"format COLOR_END, syscall(__NR_gettid), ##__VA_ARGS__)
+	#define DA_SECURE_LOGD(format, ...) SECURE_LOGD(COLOR_GREEN format COLOR_END, ##__VA_ARGS__)
+	#define DA_SECURE_LOGI(format, ...) SECURE_LOGI(COLOR_GREEN format COLOR_END, ##__VA_ARGS__)
+	#define DA_SECURE_LOGE(format, ...) SECURE_LOGE(COLOR_GREEN format COLOR_END, ##__VA_ARGS__)
+#else
 
-	#define DA_LOG(channel, format, ...) do {\
-		IS_LOG_ON(channel) \
-				? fprintf(stderr, "[DA][%u][%s(): %d] "format"\n",(unsigned int)syscall(__NR_gettid), __FUNCTION__,__LINE__, ##__VA_ARGS__) \
-				: ((void)0);\
+#include <unistd.h>
+#include <syscall.h>
+
+	#define DA_LOGD(format, ...) do {\
+				fprintf(stderr, "[DA][%d][%s():%d] "format"\n",syscall(__NR_gettid), __FUNCTION__,__LINE__, ##__VA_ARGS__);\
 	}while(0)
-	#define DA_LOG_ERR(channel, format, ...) do {\
-		IS_LOG_ON(channel) \
-				? fprintf(stderr, "[DA][%u][ERR][%s(): %d]\n",(unsigned int)syscall(__NR_gettid), __FUNCTION__,__LINE__, ##__VA_ARGS__) \
-				: ((void)0); \
+	#define DA_LOGE(format, ...) do {\
+				fprintf(stderr, "[DA][%d][ERR][%s():%d]\n",syscall(__NR_gettid), __FUNCTION__,__LINE__, ##__VA_ARGS__);\
 	}while(0)
-	#define DA_LOG_FUNC_LOGD(channel, ...) do {\
-		IS_LOG_ON(channel) \
-				? fprintf(stderr, "[DA][%u][%s(): %d] starting\n",(unsigned int)syscall(__NR_gettid), __FUNCTION__,__LINE__) \
-				: ((void)0); \
-	}while(0)
-	#define DA_LOG_CRITICAL DA_LOG
-	#define DA_LOG_VERBOSE DA_LOG
-	#define DA_LOG_FUNC_LOGV ((void)0)
+	#define DA_LOGV DA_LOGD
+	#define DA_LOGI DA_LOGD
 	#define DA_SECURE_LOGD(format, ...) ((void)0)
 	#define DA_SECURE_LOGI(format, ...) ((void)0)
 	#define DA_SECURE_LOGE(format, ...) ((void)0)
-#endif /* DA_DEBUG_USING_DLOG */
-#endif /* NDEBUG */
-#endif /* _Download_Agent_Debug_H */
+#endif /* _ENABLE_DLOG */
+
+#endif /* DOWNLOAD_AGENT_DEBUG_H */

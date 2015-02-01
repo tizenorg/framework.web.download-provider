@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef DOWNLOAD_PROVIDER2_NETWORK_H
-#define DOWNLOAD_PROVIDER2_NETWORK_H
+#ifndef DOWNLOAD_PROVIDER_NETWORK_H
+#define DOWNLOAD_PROVIDER_NETWORK_H
 
-#include <net_connection.h>
+#define DP_NETWORK_OFF -1
 
-#include "download-provider.h"
+typedef enum {
+	DP_NETWORK_DATA_NETWORK = 0,
+	DP_NETWORK_WIFI = 1,
+	DP_NETWORK_WIFI_DIRECT = 2,
+	DP_NETWORK_ALL = 3
+} dp_network_defs;
 
-dp_network_type dp_get_network_connection_status(connection_h connection, connection_type_e type);
-void dp_network_connection_type_changed_cb(connection_type_e type, void *data);
-int dp_network_connection_init(dp_privates *privates);
-void dp_network_connection_destroy(connection_h connection);
-dp_network_type dp_get_network_connection_instant_status();
-
-#ifdef SUPPORT_WIFI_DIRECT
-int dp_network_wifi_direct_is_connected();
-#endif
+int dp_network_connection_init();
+void dp_network_connection_destroy();
+int dp_network_get_status();
+int dp_network_is_wifi_direct();
 
 #endif

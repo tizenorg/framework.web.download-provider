@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2013 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef DOWNLOAD_PROVIDER2_QUEUE_H
-#define DOWNLOAD_PROVIDER2_QUEUE_H
+#ifndef DOWNLOAD_PROVIDER_QUEUE_H
+#define DOWNLOAD_PROVIDER_QUEUE_H
 
-void dp_thread_queue_manager_wake_up();
-void *dp_thread_queue_manager(void *arg);
+typedef struct { // manage clients without mutex
+	void *slot; // client can not be NULL. it will exist in dummy
+	void *request;
+	void *next;
+} dp_queue_fmt;
+
+int dp_queue_push(dp_queue_fmt **queue, void *slot, void *request);
+int dp_queue_pop(dp_queue_fmt **queue, void **slot, void **request);
+void dp_queue_clear(dp_queue_fmt **queue, void *request);
+void dp_queue_clear_all(dp_queue_fmt **queue);
 
 #endif

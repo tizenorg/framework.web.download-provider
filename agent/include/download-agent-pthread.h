@@ -14,134 +14,131 @@
  * limitations under the License.
  */
 
-#ifndef _Download_Agent_Pthread_H
-#define _Download_Agent_Pthread_H
+#ifndef _DOWNLOAD_AGENT_PTHREAD_H
+#define _DOWNLOAD_AGENT_PTHREAD_H
 
 #include <pthread.h>
 #include <errno.h>
 #include <time.h>
 
-#include "download-agent-type.h"
 #include "download-agent-debug.h"
 
-#define _da_thread_mutex_init(mutex_add, attr)  { \
-													int ret = 0; \
-													do{ \
-														ret = pthread_mutex_init(mutex_add, attr); \
-														if (0 == ret){ \
-															break; \
-														} \
-														else if(EINVAL == ret){ \
-												  			DA_LOG_ERR(Default, "pthread_mutex_init FAIL with EINVAL."); \
-												  			break; \
-												  		} \
-												  		else if(ENOMEM == ret){ \
-												  			DA_LOG_ERR(Default, "pthread_mutex_init FAIL with ENOMEM."); \
-												  			break; \
-												  		} \
-												  		else{ \
-												  			DA_LOG_ERR(Default, "pthread_mutex_init FAIL with %d.", ret); \
-												  			break; \
-												  		} \
-													}while(1); \
-												}
+#define DA_MUTEX_INIT(mutex_add, attr) {\
+	int ret = 0;\
+	do {\
+		ret = pthread_mutex_init(mutex_add, attr);\
+		if (0 == ret){\
+			break;\
+		}\
+		else if (EINVAL == ret){\
+			DA_LOGE("pthread_mutex_init FAIL with EINVAL.");\
+			break;\
+		}\
+		else if (ENOMEM == ret){\
+			DA_LOGE("pthread_mutex_init FAIL with ENOMEM.");\
+			break;\
+		}\
+		else{\
+			DA_LOGE("pthread_mutex_init FAIL with %d.", ret);\
+			break;\
+		}\
+	} while(1);\
+}
 
-#define _da_thread_cond_init(cond_add, attr)  		do{								\
-													if (0 != pthread_cond_init(cond_add, attr)){\
-														DA_LOG_ERR(Default, "pthread_cond_init FAIL");}      \
-												  	}while(0)
+#define DA_COND_INIT(cond_add, attr) do {\
+	if (0 != pthread_cond_init(cond_add, attr)){\
+		DA_LOGE("pthread_cond_init FAIL");\
+	}\
+} while(0)
 
+#define DA_MUTEX_LOCK(mutex_add) {\
+	int ret = 0;\
+	do {\
+		ret = pthread_mutex_lock(mutex_add);\
+		if (0 == ret){\
+			break;\
+		}\
+		else if (EINVAL == ret){\
+			DA_LOGE("pthread_mutex_lock FAIL with EINVAL.");\
+			break;\
+		}\
+		else if (EDEADLK == ret){\
+			DA_LOGE("pthread_mutex_lock FAIL with EDEADLK.");\
+			break;\
+		}\
+		else{\
+			DA_LOGE("pthread_mutex_lock FAIL with %d.", ret);\
+			break;\
+		}\
+	} while(1);\
+}
 
+#define DA_MUTEX_UNLOCK(mutex_add) {\
+	int ret = 0;\
+	do {\
+		ret = pthread_mutex_unlock(mutex_add);\
+		if (0 == ret){\
+			break;\
+		}\
+		else if (EINVAL == ret) {\
+			DA_LOGE("pthread_mutex_unlock FAIL with EINVAL.");\
+			break;\
+		}\
+		else if (EPERM == ret) {\
+			DA_LOGE("pthread_mutex_unlock FAIL with EPERM.");\
+			break;\
+		}\
+		else {\
+			DA_LOGE("pthread_mutex_unlock FAIL with %d.", ret);\
+			break;\
+		}\
+	} while(1);\
+}
 
-#define _da_thread_mutex_lock(mutex_add)  		{\
-													int ret = 0;\
-													do{\
-														ret = pthread_mutex_lock(mutex_add);\
-														if (0 == ret){\
-															break;\
-														}\
-														else if(EINVAL == ret){\
-												  			DA_LOG_ERR(Default, "pthread_mutex_lock FAIL with EINVAL.");\
-												  			break;\
-												  		}\
-														else if(EDEADLK == ret){\
-															DA_LOG_ERR(Default, "pthread_mutex_lock FAIL with EDEADLK.");\
-															break;\
-														}\
-												  		else{\
-												  			DA_LOG_ERR(Default, "pthread_mutex_lock FAIL with %d.", ret);\
-												  			break;\
-												  		}\
-													}while(1);\
-												}
+#define DA_COND_SIGNAL(cond_add) do {\
+		if (0 != pthread_cond_signal(cond_add)) {\
+			DA_LOGE("pthread_cond_signal FAIL");\
+		}\
+	} while(0)
 
+#define DA_COND_WAIT(cond_add, mutex_add) do {\
+		if (0 != pthread_cond_wait(cond_add, mutex_add)){\
+			DA_LOGE("pthread_cond_wait FAIL");\
+		}\
+	} while(0)
 
-#define _da_thread_mutex_unlock(mutex_add) 		{\
-													int ret = 0;\
-													do{\
-														ret = pthread_mutex_unlock(mutex_add);\
-														if (0 == ret){\
-															break;\
-														}\
-														else if(EINVAL == ret){\
-												  			DA_LOG_ERR(Default, "pthread_mutex_unlock FAIL with EINVAL.");\
-												  			break;\
-												  		}\
-												  		else if(EPERM == ret){\
-												  			DA_LOG_ERR(Default, "pthread_mutex_unlock FAIL with EPERM.");\
-												  			break;\
-												  		}\
-												  		else{\
-												  			DA_LOG_ERR(Default, "pthread_mutex_unlock FAIL with %d.", ret);\
-												  			break;\
-												  		}\
-													}while(1);\
-												}
-
-
-#define _da_thread_cond_signal(cond_add)  			do{								\
-														if (0 != pthread_cond_signal(cond_add)){\
-															DA_LOG_ERR(Default, "pthread_cond_signal FAIL");}		\
-													}while(0)
-
-
-
-#define _da_thread_cond_wait(cond_add, mutex_add) 	do{								\
-														if (0 != pthread_cond_wait(cond_add, mutex_add)){\
-															DA_LOG_ERR(Default, "pthread_cond_wait FAIL");}     \
-													}while(0)
-
-#define _da_thread_cond_timed_wait(cond_add, mutex_add, time) 	do{								\
-														if (0 != pthread_cond_timedwait(cond_add, mutex_add, time)){\
-															DA_LOG_ERR(Default, "pthread_cond_wait FAIL");}     \
-													}while(0)
+#define DA_COND_TIMED_WAIT(cond_add, mutex_add, time) do {\
+		if (0 != pthread_cond_timedwait(cond_add, mutex_add, time)){\
+			DA_LOGE("pthread_cond_wait FAIL");\
+		}\
+	} while(0)
 
 
-#define _da_thread_cond_destroy(cond_add)	do{								\
-														if (0 != pthread_cond_destroy(cond_add)){\
-													  	DA_LOG_ERR(Default, "pthread_cond_destroy FAIL");}     \
-													}while(0)
+#define DA_COND_DESTROY(cond_add)	do {\
+		if (0 != pthread_cond_destroy(cond_add)){\
+			DA_LOGE("pthread_cond_destroy FAIL");\
+		}\
+	} while(0)
 
-#define _da_thread_mutex_destroy(mutex_add) 	{\
-													int ret = 0;\
-													do{\
-														ret = pthread_mutex_destroy(mutex_add);\
-														if (0 == ret){\
-															break;\
-														}\
-														else if(EINVAL == ret){\
-												  			DA_LOG_ERR(Default, "pthread_mutex_destroy FAIL with EINVAL.");\
-												  			break;\
-												  		}\
-												  		else if(EBUSY == ret){\
-												  			DA_LOG_ERR(Default, "pthread_mutex_destroy FAIL with EBUSY.");\
-												  			break;\
-												  		}\
-												  		else{\
-												  			DA_LOG_ERR(Default, "pthread_mutex_destroy FAIL with %d.", ret);\
-												  			break;\
-												  		}\
-													}while(1);\
-												}
-
+#define DA_MUTEX_DESTROY(mutex_add) {\
+	int ret = 0;\
+	do {\
+		ret = pthread_mutex_destroy(mutex_add);\
+		if (0 == ret){\
+			break;\
+		}\
+		else if (EINVAL == ret){\
+			DA_LOGE("pthread_mutex_destroy FAIL with EINVAL.");\
+			break;\
+		}\
+		else if (EBUSY == ret){\
+			DA_LOGE("pthread_mutex_destroy FAIL with EBUSY.");\
+			break;\
+		}\
+		else {\
+			DA_LOGE("pthread_mutex_destroy FAIL with %d.", ret);\
+			break;\
+		}\
+	} while(1);\
+}
 #endif

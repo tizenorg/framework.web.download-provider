@@ -30,27 +30,24 @@
 #include <dlog.h>
 #include <download-provider-interface.h>
 #include <download-provider.h>
+#include <download-provider-log.h>
+#include <download-provider-pthread.h>
+#include <download-provider-ipc.h>
+#include <download-provider-utils.h>
+
+#include <bundle.h> // for notification bundle
+#include <app_control.h>
+#include <app_control_internal.h>
 
 #ifdef SUPPORT_CHECK_IPC
 #include <sys/ioctl.h>
 #endif
 
 #define DP_CHECK_CONNECTION do {\
-	if (__check_connections() != DP_ERROR_NONE) {\
-		pthread_mutex_unlock(&g_function_mutex);\
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;\
-	}\
-} while(0)
-
-#define DP_CHECK_PROVIDER_STATUS do {\
-	dp_error_type errorcode = DP_ERROR_NONE;\
-	errorcode = __ipc_check_ready_status(g_interface_info->cmd_socket);\
-	if (errorcode != DP_ERROR_NONE) {\
-		pthread_mutex_unlock(&g_interface_info->mutex);\
-		if (errorcode == DP_ERROR_IO_ERROR)\
-			__disconnect_from_provider();\
-		pthread_mutex_unlock(&g_function_mutex);\
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;\
+	int dp_errorcode = __check_connections();\
+	if (dp_errorcode != DP_ERROR_NONE) {\
+		CLIENT_MUTEX_UNLOCK(&g_function_mutex);\
+		return __dp_interface_convert_errorcode(dp_errorcode);\
 	}\
 } while(0)
 
@@ -61,110 +58,29 @@
 	}\
 } while(0)
 
-#define MAX_DOWNLOAD_HANDLE 32
-
-#ifdef SUPPORT_LOG_MESSAGE
-#include <dlog.h>
-#ifdef LOG_TAG
-#undef LOG_TAG
-#endif
-#define LOG_TAG "DOWNLOAD_PROVIDER_INTERFACE"
-#define TRACE_DEBUG(format, ARG...) LOGD(format, ##ARG)
-#define TRACE_ERROR(format, ARG...) LOGE(format, ##ARG)
-#define TRACE_STRERROR(format, ARG...) LOGE(format" [%s]", ##ARG, strerror(errno))
-#define TRACE_INFO(format, ARG...) LOGI(format, ##ARG)
-
-#ifdef SECURE_LOGD
-#define TRACE_SECURE_DEBUG(format, ARG...) SECURE_LOGD(format, ##ARG)
-#else
-#define TRACE_SECURE_DEBUG(...) do { } while(0)
-#endif
-#ifdef SECURE_LOGI
-#define TRACE_SECURE_INFO(format, ARG...) SECURE_LOGI(format, ##ARG)
-#else
-#define TRACE_SECURE_INFO(...) do { } while(0)
-#endif
-#ifdef SECURE_LOGE
-#define TRACE_SECURE_ERROR(format, ARG...) SECURE_LOGE(format, ##ARG)
-#else
-#define TRACE_SECURE_ERROR(...) do { } while(0)
-#endif
-
-#else
-#define TRACE_DEBUG(...) do { } while(0)
-#define TRACE_ERROR(...) do { } while(0)
-#define TRACE_STRERROR(...) do { } while(0)
-#define TRACE_INFO(...) do { } while(0)
-#define TRACE_SECURE_DEBUG(...) do { } while(0)
-#define TRACE_SECURE_INFO(...) do { } while(0)
-#define TRACE_SECURE_ERROR(...) do { } while(0)
-#endif
-
 // define type
 typedef struct {
-	// send command * get return value.
-	int cmd_socket;
-	// getting event from download-provider
-	int event_socket;
-	pthread_mutex_t mutex; // lock before using, unlock after using
-} dp_interface_info;
+	int channel; // query & response
+	int notify;  // event from provider
+} dp_interface_ipc;
 
 typedef struct {
+	int id;
 	dp_interface_state_changed_cb state;
 	void *state_data;
 	dp_interface_progress_cb progress;
 	void *progress_data;
-} dp_interface_callback;
-
-typedef struct {
-	int id;
-	dp_interface_callback callback;
 } dp_interface_slot;
 
 // declare the variables
-dp_interface_info *g_interface_info = NULL;
+dp_interface_ipc *g_dp_client = NULL;
 dp_interface_slot g_interface_slots[MAX_DOWNLOAD_HANDLE];
 static pthread_mutex_t g_function_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_clear_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_t g_interface_event_thread_id = 0;
+static pthread_t g_dp_event_thread_id = 0;
 
 //////////// defines functions /////////////////
 
-
-
-static int __dp_interface_convert_network_adaptor(int type)
-{
-	switch (type) {
-	case DOWNLOAD_ADAPTOR_NETWORK_WIFI:
-		return DP_NETWORK_TYPE_WIFI;
-	case DOWNLOAD_ADAPTOR_NETWORK_DATA_NETWORK:
-		return DP_NETWORK_TYPE_DATA_NETWORK;
-	case DOWNLOAD_ADAPTOR_NETWORK_WIFI_DIRECT:
-		return DP_NETWORK_TYPE_WIFI_DIRECT;
-	case DOWNLOAD_ADAPTOR_NETWORK_ALL:
-		return DP_NETWORK_TYPE_ALL;
-	default:
-		break;
-	}
-	return type;
-}
-
-static int __dp_interface_convert_network_provider(int type)
-{
-	switch (type) {
-	case DP_NETWORK_TYPE_WIFI:
-		return DOWNLOAD_ADAPTOR_NETWORK_WIFI;
-	case DP_NETWORK_TYPE_DATA_NETWORK:
-		return DOWNLOAD_ADAPTOR_NETWORK_DATA_NETWORK;
-	case DP_NETWORK_TYPE_WIFI_DIRECT:
-		return DOWNLOAD_ADAPTOR_NETWORK_WIFI_DIRECT;
-	case DOWNLOAD_ADAPTOR_NETWORK_ALL:
-		return DP_NETWORK_TYPE_ALL;
-	default:
-		break;
-	}
-	return type;
-}
 
 static int __dp_interface_convert_state(int state)
 {
@@ -180,9 +96,6 @@ static int __dp_interface_convert_state(int state)
 		return DOWNLOAD_ADPATOR_STATE_QUEUED;
 	case DP_STATE_DOWNLOADING:
 		TRACE_DEBUG("DOWNLOADING");
-		return DOWNLOAD_ADPATOR_STATE_DOWNLOADING;
-	case DP_STATE_PAUSE_REQUESTED:
-		TRACE_DEBUG("PAUSE_REQUESTED/DOWNLOADING");
 		return DOWNLOAD_ADPATOR_STATE_DOWNLOADING;
 	case DP_STATE_PAUSED:
 		TRACE_DEBUG("PAUSED");
@@ -235,6 +148,7 @@ static int __dp_interface_convert_errorcode(int errorcode)
 		TRACE_DEBUG("ERROR_INVALID_STATE");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_STATE;
 	case DP_ERROR_CONNECTION_FAILED:
+	case DP_ERROR_NETWORK_ERROR:
 		TRACE_DEBUG("ERROR_CONNECTION_TIMED_OUT/CONNECTION_FAILED");
 		return DOWNLOAD_ADAPTOR_ERROR_CONNECTION_TIMED_OUT;
 	case DP_ERROR_INVALID_URL:
@@ -273,6 +187,9 @@ static int __dp_interface_convert_errorcode(int errorcode)
 	case DP_ERROR_UNKNOWN:
 		TRACE_DEBUG("ERROR_INVALID_STATE/UNKNOWN");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_STATE;
+	case DP_ERROR_INVALID_NETWORK_TYPE:
+		TRACE_DEBUG("ERROR_INVALID_NETWORK_TYPE");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_NETWORK_TYPE;
 	default:
 		break;
 	}
@@ -298,335 +215,9 @@ static int __get_empty_slot_index()
 	return -1;
 }
 
-static dp_error_type __get_standard_errorcode(dp_error_type basecode)
-{
-	dp_error_type errorcode = basecode;
-	if (errno == EPIPE) {
-		TRACE_ERROR("[EPIPE] Broken Pipe [%d]", errno);
-		errorcode = DP_ERROR_IO_ERROR;
-	} else if (errno == EAGAIN) {
-		TRACE_ERROR
-			("[EAGAIN] Resource temporarily unavailable [%d]",
-			errno);
-		errorcode = DP_ERROR_IO_EAGAIN;
-	} else if (errno == EINTR) {
-		TRACE_ERROR("[EINTR] Interrupted System Call [%d]", errno);
-		errorcode = DP_ERROR_IO_ERROR;
-	}
-	return errorcode;
-}
-
-static int __ipc_read_custom_type(int fd, void *value, size_t type_size)
-{
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK SOCKET]");
-		return -1;
-	}
-	if (value == NULL) {
-		TRACE_ERROR("[CHECK value]");
-		return -1;
-	}
-	if (type_size <= 0) {
-		TRACE_ERROR("[CHECK size]");
-		return -1;
-	}
-
-	ssize_t recv_bytes = read(fd, value, type_size);
-	if (recv_bytes < 0) {
-		TRACE_STRERROR("[CRITICAL] read");
-		return -1;
-	}
-	return 0;
-}
-
-static int __ipc_read_int(int fd)
-{
-	int value = -1;
-
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK SOCKET]");
-		return -1;
-	}
-	ssize_t recv_bytes = read(fd, &value, sizeof(int));
-	if (recv_bytes < 0) {
-		TRACE_STRERROR("[CRITICAL] read");
-		return -1;
-	}
-	return value;
-}
-
-static int __ipc_read_download_id(int fd)
-{
-	int value = -1;
-	int read_len = 0;
-	int try_count = 5;
-
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK SOCKET]");
-		return -1;
-	}
-	do {
-		read_len = read(fd, &value, sizeof(int));
-		if (read_len < 0) {
-			TRACE_STRERROR("[CRITICAL] read");
-			return -1;
-		}
-		try_count--;
-	} while (read_len == 0 && value == 0 && try_count > 0);
-	return value;
-}
-
-// keep the order/ unsigned , str
-static char *__ipc_read_string(int fd)
-{
-	unsigned length = 0;
-	size_t recv_size = 0;
-	unsigned remain_size = 0;
-	size_t buffer_size = 0;
-	char *str = NULL;
-
-	if (fd < 0) {
-		TRACE_ERROR("[ERROR] CHECK FD[%d]", fd);
-		return NULL;
-	}
-
-	// read flexible URL from client.
-	ssize_t recv_bytes = read(fd, &length, sizeof(unsigned));
-	if (recv_bytes < 0) {
-		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
-		return NULL;
-	}
-	if (length < 1 || length > DP_MAX_URL_LEN) {
-		TRACE_ERROR("[STRING LEGNTH] [%d]", length);
-		return NULL;
-	}
-	str = (char *)calloc((length + 1), sizeof(char));
-	if (str == NULL) {
-		TRACE_STRERROR("[ERROR] calloc length:%d FD[%d]", length, fd);
-		return NULL;
-	}
-	remain_size = length;
-	do {
-		buffer_size = 0;
-		if (remain_size > DP_DEFAULT_BUFFER_SIZE)
-			buffer_size = DP_DEFAULT_BUFFER_SIZE;
-		else
-			buffer_size = remain_size;
-		recv_size = (size_t)read(fd, str + (int)(length - remain_size),
-				buffer_size * sizeof(char));
-		if (recv_size > DP_DEFAULT_BUFFER_SIZE) {
-			recv_size = -1;
-			break;
-		}
-		if (recv_size > 0)
-			remain_size = remain_size - (unsigned)recv_size;
-	} while (recv_size > 0 && remain_size > 0);
-
-	if (recv_size == 0) {
-		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
-		free(str);
-		return NULL;
-	}
-	str[length] = '\0';
-	return str;
-}
-
-int __ipc_read_bundle(int fd, bundle_raw **b)
-{
-	unsigned length = 0;
-	size_t recv_size = 0;
-	unsigned remain_size = 0;
-	size_t buffer_size = 0;
-	bundle_raw *b_raw = NULL;
-
-	if (fd < 0) {
-		TRACE_ERROR("[ERROR] CHECK FD[%d]", fd);
-		return 0;
-	}
-
-	// read bundle data from client.
-	ssize_t recv_bytes = read(fd, &length, sizeof(unsigned));
-	if (recv_bytes < 0) {
-		TRACE_STRERROR("[ERROR] read FD[%d] length[%d]", fd, length);
-		return 0;
-	}
-	if (length < 1 || length > DP_MAX_URL_LEN) {
-		TRACE_ERROR("[STRING LEGNTH] [%d]", length);
-		return 0;
-	}
-	b_raw = (bundle_raw *)calloc(length, 1);
-	if (b_raw == NULL) {
-		TRACE_STRERROR("[ERROR] calloc length:%d FD[%d]", length, fd);
-		return 0;
-	}
-	remain_size = length;
-	do {
-		buffer_size = 0;
-		if (remain_size > DP_DEFAULT_BUFFER_SIZE)
-			buffer_size = DP_DEFAULT_BUFFER_SIZE;
-		else
-			buffer_size = remain_size;
-		recv_size = (size_t)read(fd, b_raw + (int)(length - remain_size),
-				buffer_size);
-		if (recv_size > DP_DEFAULT_BUFFER_SIZE) {
-			recv_size = -1;
-			break;
-		}
-		if (recv_size > 0)
-			remain_size = remain_size - (unsigned)recv_size;
-	} while (recv_size > 0 && remain_size > 0);
-
-	if (recv_size == 0) {
-		TRACE_STRERROR("[ERROR] closed peer:%d", fd);
-		bundle_free_encoded_rawdata(&b_raw);
-		return 0;
-	}
-	*b = b_raw;
-	return (int)length;
-}
-
-static dp_error_type __ipc_return(int fd)
-{
-	dp_error_type errorcode = DP_ERROR_NONE;
-
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK SOCKET]");
-		return DP_ERROR_IO_ERROR;
-	}
-	ssize_t recv_bytes = read(fd, &errorcode, sizeof(dp_error_type));
-	if (recv_bytes < 0) {
-		TRACE_STRERROR("[CRITICAL] read");
-		return __get_standard_errorcode(DP_ERROR_IO_ERROR);
-	}
-	if (errorcode != DP_ERROR_NONE)
-		TRACE_ERROR("return : %d", errorcode);
-	return errorcode;
-}
-
-static dp_event_info* __ipc_event(int fd)
-{
-	dp_event_info *event = NULL;
-
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK SOCKET]");
-		return NULL;
-	}
-
-	event = (dp_event_info *) calloc(1, sizeof(dp_event_info));
-	if (event == NULL) {
-		TRACE_ERROR("[CHECK ALLOCATION]");
-		return NULL;
-	}
-	ssize_t recv_bytes = read(fd, event, sizeof(dp_event_info));
-	if (recv_bytes < 0) {
-		TRACE_STRERROR("[CRITICAL] read");
-		free(event);
-		return NULL;
-	}
-	return event;
-}
-
-static int __ipc_send_int(int fd, int value)
-{
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK FD] [%d]", fd);
-		return -1;
-	}
-
-	if (fd >= 0 && write(fd, &value, sizeof(int)) < 0) {
-		TRACE_STRERROR("[CRITICAL] send");
-		return -1;
-	}
-	return 0;
-}
-
-// keep the order/ unsigned , str
-static dp_error_type __ipc_send_string(int fd, const char *str)
-{
-	unsigned length = 0;
-
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK FD]");
-		return DP_ERROR_IO_ERROR;
-	}
-	if (str == NULL || (length = strlen(str)) <= 0) {
-		TRACE_ERROR("[CHECK STRING]");
-		return DP_ERROR_INVALID_PARAMETER;
-	}
-
-	if (fd >= 0 && write(fd, &length, sizeof(unsigned)) < 0) {
-		TRACE_STRERROR("[CRITICAL] send");
-		return DP_ERROR_IO_ERROR;
-	}
-	if (fd >= 0 && write(fd, str, length * sizeof(char)) < 0) {
-		TRACE_STRERROR("[CRITICAL] send");
-		return DP_ERROR_IO_ERROR;
-	}
-	return DP_ERROR_NONE;
-}
-
-static dp_error_type __ipc_send_raw_bundle(int fd, int type, const bundle_raw *b, int len)
-{
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK FD]");
-		return DP_ERROR_IO_ERROR;
-	}
-	if (b == NULL || len <= 0) {
-		TRACE_ERROR("[CHECK STRING]");
-		return DP_ERROR_INVALID_PARAMETER;
-	}
-	if (fd >= 0 && write(fd, &type, sizeof(unsigned)) < 0) {
-		TRACE_STRERROR("[CRITICAL] send");
-		return DP_ERROR_IO_ERROR;
-	}
-	if (fd >= 0 && write(fd, &len, sizeof(unsigned)) < 0) {
-		TRACE_STRERROR("[CRITICAL] send");
-		return DP_ERROR_IO_ERROR;
-	}
-	if (fd >= 0 && write(fd, b, len) < 0) {
-		TRACE_STRERROR("[CRITICAL] send");
-		return DP_ERROR_IO_ERROR;
-	}
-	return DP_ERROR_NONE;
-}
-
-static dp_error_type __ipc_send_command
-	(int fd, int id, dp_command_type cmd)
-{
-	if (fd < 0) {
-		TRACE_ERROR("[CHECK SOCKET]");
-		return DP_ERROR_IO_ERROR;
-	}
-
-	dp_command command;
-	command.id = id;
-	command.cmd = cmd;
-	if (fd >= 0 && write(fd, &command, sizeof(dp_command)) < 0) {
-		TRACE_STRERROR("[CRITICAL] send");
-		return DP_ERROR_IO_ERROR;
-	}
-	return DP_ERROR_NONE;
-}
-
-static dp_error_type __ipc_send_command_return
-	(int id, dp_command_type cmd)
-{
-	if (cmd <= DP_CMD_NONE) {
-		TRACE_ERROR("[CHECK COMMAND] (%d)", cmd);
-		return DP_ERROR_INVALID_PARAMETER;
-	}
-	// send commnad with ID
-	if (__ipc_send_command(g_interface_info->cmd_socket, id, cmd) !=
-			DP_ERROR_NONE)
-		return DP_ERROR_IO_ERROR;
-	// return from provider.
-	return __ipc_return(g_interface_info->cmd_socket);
-}
-
 static int __create_socket()
 {
 	int sockfd = -1;
-	struct timeval tv_timeo = { 2, 500000 }; //2.5 second
 	struct sockaddr_un clientaddr;
 
 	if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
@@ -634,21 +225,18 @@ static int __create_socket()
 		return -1;
 	}
 
-	if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv_timeo,
-			sizeof( tv_timeo ) ) < 0) {
-		TRACE_STRERROR("[CRITICAL] setsockopt SO_RCVTIMEO");
-		close(sockfd);
-		return -1;
-	}
-
 	bzero(&clientaddr, sizeof clientaddr);
 	clientaddr.sun_family = AF_UNIX;
 	memset(clientaddr.sun_path, 0x00, sizeof(clientaddr.sun_path));
-	strncpy(clientaddr.sun_path, DP_IPC, strlen(DP_IPC));
-	clientaddr.sun_path[strlen(DP_IPC)] = '\0';
+	strncpy(clientaddr.sun_path, IPC_SOCKET, strlen(IPC_SOCKET));
+	clientaddr.sun_path[strlen(IPC_SOCKET)] = '\0';
 	if (connect(sockfd,
 		(struct sockaddr*)&clientaddr, sizeof(clientaddr)) < 0) {
 		close(sockfd);
+		if (errno == EACCES || errno == EPERM) {
+			TRACE_STRERROR("check permission");
+			return -DP_ERROR_PERMISSION_DENIED;
+		}
 		return -1;
 	}
 	TRACE_DEBUG("sockfd [%d]", sockfd);
@@ -658,88 +246,53 @@ static int __create_socket()
 static void __clear_interface()
 {
 	TRACE_DEBUG("");
-	pthread_mutex_lock(&g_clear_mutex);
-	if (g_interface_info != NULL) {
-		shutdown(g_interface_info->cmd_socket, 0);
-		close(g_interface_info->cmd_socket);
-		g_interface_info->cmd_socket= -1;
-		shutdown(g_interface_info->event_socket, 0);
-		close(g_interface_info->event_socket);
-		g_interface_info->event_socket = -1;
-		pthread_mutex_destroy(&g_interface_info->mutex);
-		free(g_interface_info);
-		g_interface_info = NULL;
+	CLIENT_MUTEX_LOCK(&g_clear_mutex);
+	if (g_dp_client != NULL) {
+		if (g_dp_client->channel >= 0)
+			close(g_dp_client->channel);
+		g_dp_client->channel= -1;
+		if (g_dp_client->notify >= 0)
+			close(g_dp_client->notify);
+		g_dp_client->notify = -1;
+		free(g_dp_client);
+		g_dp_client = NULL;
 	}
-	pthread_mutex_unlock(&g_clear_mutex);
+	CLIENT_MUTEX_UNLOCK(&g_clear_mutex);
 }
 
-static int __disconnect_from_provider()
+static int __bp_disconnect(const char *funcname)
 {
-	TRACE_DEBUG("");
-	if (g_interface_event_thread_id > 0 &&
-			pthread_kill(g_interface_event_thread_id, 0) != ESRCH) {
-		if (pthread_cancel(g_interface_event_thread_id) != 0) {
-			TRACE_STRERROR("pthread:%d", (int)g_interface_event_thread_id);
+	TRACE_DEBUG("%s", funcname);
+	if (g_dp_event_thread_id > 0 &&
+			pthread_kill(g_dp_event_thread_id, 0) != ESRCH) {
+		if (pthread_cancel(g_dp_event_thread_id) != 0) {
+			TRACE_STRERROR("pthread:%d", (int)g_dp_event_thread_id);
 		}
-		g_interface_event_thread_id = 0;
+		g_dp_event_thread_id = 0;
 	}
 	__clear_interface();
 	return DP_ERROR_NONE;
 }
 
-#ifdef SUPPORT_CHECK_IPC
-// clear read buffer. call in head of API before calling IPC_SEND
-static void __clear_read_buffer(int fd)
-{
-	long i;
-	long unread_count;
-	char tmp_char;
-
-	// FIONREAD : Returns the number of bytes immediately readable
-	if (ioctl(fd, FIONREAD, &unread_count) >= 0) {
-		if (unread_count > 0) {
-			TRACE_DEBUG("[CLEAN] garbage packet[%ld]", unread_count);
-			for ( i = 0; i < unread_count; i++) {
-				if (read(fd, &tmp_char, sizeof(char)) < 0) {
-					TRACE_STRERROR("[CHECK] read");
-					break;
-				}
-			}
-		}
-	}
-}
-#endif
-
-// ask to provider before sending a command.
-// if provider wait in some commnad, can not response immediately
-// capi will wait in read block.
-// after asking, call clear_read_buffer.
-static dp_error_type __ipc_check_ready_status(int fd)
-{
-	dp_error_type errorcode = DP_ERROR_NONE;
-
-#ifdef SUPPORT_CHECK_IPC
-	// echo from provider
-	errorcode = __ipc_send_command_return(-1, DP_CMD_ECHO);
-	if (errorcode == DP_ERROR_NONE)
-		__clear_read_buffer(fd);
-#endif
-	return errorcode;
-}
-
 // listen ASYNC state event, no timeout
-static void *__dp_interface_event_manager(void *arg)
+static void *__dp_event_manager(void *arg)
 {
-	int maxfd, index;
-	fd_set rset, read_fdset;
-	dp_event_info *eventinfo = NULL;
-
-	if (g_interface_info == NULL) {
+	if (g_dp_client == NULL) {
 		TRACE_STRERROR("[CRITICAL] INTERFACE null");
 		return 0;
 	}
-	if (g_interface_info->event_socket < 0) {
-		TRACE_STRERROR("[CRITICAL] IPC NOT ESTABILISH");
+
+	size_t path_size = sizeof(NOTIFY_DIR) + 11;
+	char notify_fifo[path_size];
+	snprintf((char *)&notify_fifo, path_size,"%s/%d", NOTIFY_DIR, getpid());
+	TRACE_DEBUG("IPC ESTABILISH %s", notify_fifo);
+	g_dp_client->notify = open(notify_fifo, O_RDONLY, 0600);
+	if (g_dp_client->notify < 0) {
+		TRACE_STRERROR("[CRITICAL] failed to ESTABILISH IPC %s", notify_fifo);
+		g_dp_event_thread_id = 0;
+		CLIENT_MUTEX_LOCK(&g_function_mutex);
+		__clear_interface();
+		CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 		return 0;
 	}
 
@@ -747,603 +300,421 @@ static void *__dp_interface_event_manager(void *arg)
 	// ex) function : select, read in this thread
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 
-	maxfd = g_interface_info->event_socket;
-	FD_ZERO(&read_fdset);
-	FD_SET(g_interface_info->event_socket, &read_fdset);
+	while(g_dp_client != NULL && g_dp_client->notify >= 0) {
 
-	int sock = g_interface_info->event_socket;
-
-	while(g_interface_info != NULL
-			&& g_interface_info->event_socket >= 0) {
-		rset = read_fdset;
-		if (select((maxfd + 1), &rset, 0, 0, 0) < 0) {
-			TRACE_STRERROR("[CRITICAL] select");
-			break;
-		}
-
-		if (g_interface_event_thread_id <=0
-			|| pthread_self() != g_interface_event_thread_id) {
-			TRACE_ERROR
-				("[CRITICAL] [CHECK TID] SELF ID [%d] Global ID (%d)",
-				pthread_self(), g_interface_event_thread_id);
+		if (g_dp_event_thread_id <= 0 ||
+				pthread_self() != g_dp_event_thread_id) {
+			TRACE_ERROR("competitive threads self:%0x global:%0x",
+				pthread_self(), g_dp_event_thread_id);
 			// another thread may work. just terminate
 			break;
 		}
 
-		if (FD_ISSET(sock, &rset) > 0) {
-			// read state info from socket
-			eventinfo = __ipc_event(sock);
-			if (eventinfo == NULL || eventinfo->id <= 0) {
-				// failed to read from socket // ignore this status
-				free(eventinfo);
-				TRACE_STRERROR("[CRITICAL] Can not read Event packet");
-				g_interface_event_thread_id = 0;
-				__clear_interface();
-				return 0;
-			}
-
-			if ((index = __get_my_slot_index(eventinfo->id)) < 0) {
-				TRACE_ERROR("[CRITICAL] not found slot for [%d]",
-					eventinfo->id);
-				free(eventinfo);
-				continue;
-			}
-
-			// begin protect callback sections & thread safe
-			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-			dp_interface_callback *callback =
-				&g_interface_slots[index].callback;
-
-			if (eventinfo->state == DP_STATE_DOWNLOADING
-				&& eventinfo->received_size > 0) {
-				if (eventinfo->id == g_interface_slots[index].id &&
-					callback->progress != NULL) {
-					// progress event
-					callback->progress(eventinfo->id,
-						eventinfo->received_size,
-						callback->progress_data);
-				}
-			} else {
-				if (eventinfo->id == g_interface_slots[index].id &&
-					callback->state != NULL) {
-					// state event
-					callback->state(eventinfo->id,
-						__dp_interface_convert_state(eventinfo->state),
-						callback->state_data);
-				}
-			}
-			free(eventinfo);
-			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+		// blocking fifo.
+		dp_ipc_event_fmt eventinfo;
+		memset(&eventinfo, 0x00, sizeof(dp_ipc_event_fmt));
+		if (dp_ipc_read(g_dp_client->notify, &eventinfo,
+				sizeof(dp_ipc_event_fmt), __FUNCTION__) <= 0 ||
+				(eventinfo.id <= 0 &&
+					eventinfo.errorcode == DP_ERROR_CLIENT_DOWN)) {
+			TRACE_INFO("expelled by provider");
+			g_dp_event_thread_id = 0;
+			CLIENT_MUTEX_LOCK(&g_function_mutex);
+			__clear_interface();
+			CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+			return 0;
 		}
+
+		int index = -1;
+		if ((index = __get_my_slot_index(eventinfo.id)) < 0) {
+			TRACE_ERROR("[CRITICAL] not found slot id:%d", eventinfo.id);
+			continue;
+		}
+
+		// begin protect callback sections & thread safe
+		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+
+		if (eventinfo.state == DP_STATE_DOWNLOADING &&
+				eventinfo.received_size > 0) {
+			if (eventinfo.id == g_interface_slots[index].id &&
+				g_interface_slots[index].progress != NULL) {
+				// progress event
+				g_interface_slots[index].progress(eventinfo.id,
+					eventinfo.received_size,
+					g_interface_slots[index].progress_data);
+			}
+		} else {
+			if (eventinfo.id == g_interface_slots[index].id &&
+				g_interface_slots[index].state != NULL) {
+				// state event
+				g_interface_slots[index].state(eventinfo.id,
+					__dp_interface_convert_state(eventinfo.state),
+					g_interface_slots[index].state_data);
+			}
+		}
+		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 	} // while
 
-	FD_CLR(sock, &read_fdset);
-	g_interface_event_thread_id = 0; // set 0 to not call pthread_cancel
+	g_dp_event_thread_id = 0; // set 0 to not call pthread_cancel
 	TRACE_DEBUG("thread end by itself");
 	return 0;
 }
 
+
+
+
+
+
+////////////////// new download-provider ///////////////////////////////
+////////////////// created on 7 November, 2013 /////////////////////////
+
+#define DP_CHECK_IPC_SOCK (g_dp_client == NULL ? -1 : g_dp_client->channel)
+
+static void __dp_ipc_clear_garbage(int sock, const size_t length)
+{
+	if (length > 0) {
+		char garbage[length];
+		if (read(sock, &garbage, length) == 0) {
+			TRACE_ERROR("sock:%d closed peer", sock);
+		}
+	}
+}
+
+static int __dp_ipc_response(int sock, int download_id, short section,
+	unsigned property, size_t *size)
+{
+	dp_ipc_fmt *ipc_info = dp_ipc_get_fmt(sock);
+	if (ipc_info == NULL || ipc_info->section != section ||
+			ipc_info->property != property ||
+			(download_id >= 0 && ipc_info->id != download_id)) {
+		TRACE_STRERROR("socket read ipcinfo");
+		free(ipc_info);
+		return DP_ERROR_IO_ERROR;
+	}
+	int errorcode = ipc_info->errorcode;
+	if (size != NULL)
+		*size = ipc_info->size;
+	free(ipc_info);
+	return errorcode;
+}
+
 static int __connect_to_provider()
 {
-	pthread_mutex_lock(&g_clear_mutex);
-	if (g_interface_info == NULL) {
+	int errorcode = DP_ERROR_NONE;
 
-		g_interface_info =
-			(dp_interface_info *) calloc(1, sizeof(dp_interface_info));
+	CLIENT_MUTEX_LOCK(&g_clear_mutex);
+
+	if (g_dp_client == NULL) {
+		g_dp_client =
+			(dp_interface_ipc *)calloc(1, sizeof(dp_interface_ipc));
+
+		if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+			TRACE_ERROR("failed to ignore SIGPIPE signal");
+		}
 	}
 
-	if (g_interface_info != NULL) {
+	if (g_dp_client != NULL) {
 
 		int connect_retry = 3;
-		g_interface_info->cmd_socket = -1;
-		while(g_interface_info->cmd_socket < 0 && connect_retry-- > 0) {
-			g_interface_info->cmd_socket = __create_socket();
-			if (g_interface_info->cmd_socket < 0)
-				usleep(50000);
+		g_dp_client->channel = -1;
+		while(g_dp_client->channel < 0 && connect_retry-- > 0) {
+			int ret = __create_socket();
+			if (ret == -1) {
+				TRACE_STRERROR("failed to connect to provider(remains:%d)", connect_retry);
+				struct timespec ts;
+				ts.tv_sec = 0;
+				ts.tv_nsec = 20000000;
+				nanosleep(&ts, NULL);
+			} else if (ret >= 0) {
+				struct timeval tv_timeo = { 1, 500000 }; // 1.5 second
+				g_dp_client->channel = ret;
+				if (setsockopt(g_dp_client->channel, SOL_SOCKET, SO_RCVTIMEO, &tv_timeo, sizeof(tv_timeo)) < 0) {
+					TRACE_STRERROR("[CRITICAL] setsockopt SO_RCVTIMEO");
+				}
+			} else {
+				errorcode = -ret;
+				TRACE_STRERROR("check error:%d", errorcode);
+				goto EXIT_CONNECT;
+			}
 		}
-		if (g_interface_info->cmd_socket < 0) {
+		if (g_dp_client->channel < 0) {
 			TRACE_STRERROR("[CRITICAL] connect system error");
-			free(g_interface_info);
-			g_interface_info = NULL;
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
+			errorcode = DP_ERROR_IO_ERROR;
+			goto EXIT_CONNECT;
 		}
-		// send a command
-		if (__ipc_send_int(g_interface_info->cmd_socket,
-			DP_CMD_SET_COMMAND_SOCKET) < 0) {
-			close(g_interface_info->cmd_socket);
-			free(g_interface_info);
-			g_interface_info = NULL;
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
+
+		if (dp_ipc_query(g_dp_client->channel, -1, DP_SEC_INIT,
+				DP_PROP_NONE, DP_ERROR_NONE, 0) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			goto EXIT_CONNECT;
 		}
 #ifndef SO_PEERCRED
+		dp_credential cred;
+		cred.pid = getpid();
+		cred.uid = getuid();
+		cred.gid = getgid();
 		// send PID. Not support SO_PEERCRED
-		if (__ipc_send_int(g_interface_info->cmd_socket, getpid()) < 0) {
-			close(g_interface_info->cmd_socket);
-			free(g_interface_info);
-			g_interface_info = NULL;
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
-		}
-		if (__ipc_send_int(g_interface_info->cmd_socket, getuid()) < 0) {
-			close(g_interface_info->cmd_socket);
-			free(g_interface_info);
-			g_interface_info = NULL;
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
-		}
-		if (__ipc_send_int(g_interface_info->cmd_socket, getgid()) < 0) {
-			close(g_interface_info->cmd_socket);
-			free(g_interface_info);
-			g_interface_info = NULL;
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
-		}
-#endif
-		g_interface_info->event_socket = __create_socket();
-		if (g_interface_info->event_socket < 0) {
-			TRACE_STRERROR("[CRITICAL] connect system error");
-			close(g_interface_info->cmd_socket);
-			free(g_interface_info);
-			g_interface_info = NULL;
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
-		}
-		// send a command
-		if (__ipc_send_int(g_interface_info->event_socket,
-			DP_CMD_SET_EVENT_SOCKET) < 0) {
-			close(g_interface_info->cmd_socket);
-			close(g_interface_info->event_socket);
-			free(g_interface_info);
-			g_interface_info = NULL;
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
-		}
-#ifndef SO_PEERCRED
-		// send PID. Not support SO_PEERCRED
-		if (__ipc_send_int
-				(g_interface_info->event_socket, getpid()) < 0) {
-			close(g_interface_info->cmd_socket);
-			close(g_interface_info->event_socket);
-			free(g_interface_info);
-			g_interface_info = NULL;
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
+		if (dp_ipc_write(g_dp_client->channel,
+				&cred, sizeof(dp_credential)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			goto EXIT_CONNECT;
 		}
 #endif
 
-		int ret = pthread_mutex_init(&g_interface_info->mutex, NULL);
-		if (ret != 0) {
-			TRACE_STRERROR("ERR:pthread_mutex_init FAIL with %d.", ret);
-			__clear_interface();
-			pthread_mutex_unlock(&g_clear_mutex);
-			return DP_ERROR_IO_ERROR;
+		errorcode = __dp_ipc_response(g_dp_client->channel,
+				-1, DP_SEC_INIT, DP_PROP_NONE, NULL);
+		// Commented by justine.bang
+		// Above ipc_query call try to wake up download-provider.
+		// But, we can sometimes meet EINTR, EAGAIN or EINPROGRESS signal if systemd is slow.
+		// So, If meet EINTR ,EAGAIN or EINPROGRESS in this line, it's better to wait response from download-provider one more time.
+		if (errorcode == DP_ERROR_IO_ERROR && (errno == EINTR || errno == EAGAIN || errno == EINPROGRESS)) {
+			errorcode = __dp_ipc_response(g_dp_client->channel,
+					-1, DP_SEC_INIT, DP_PROP_NONE, NULL);
+		}
+
+		if (errorcode == DP_ERROR_NONE && g_dp_event_thread_id <= 0) {
+			if (pthread_create(&g_dp_event_thread_id, NULL,
+					__dp_event_manager, g_dp_client) != 0) {
+				TRACE_STRERROR("failed to create event-manager");
+				errorcode = DP_ERROR_IO_ERROR;
+			} else {
+				pthread_detach(g_dp_event_thread_id);
+			}
 		}
 
 	}
-	pthread_mutex_unlock(&g_clear_mutex);
-	if (g_interface_event_thread_id <= 0) {
-		// create thread here ( getting event_socket )
-		pthread_attr_t thread_attr;
-		if (pthread_attr_init(&thread_attr) != 0) {
-			TRACE_STRERROR("[CRITICAL] pthread_attr_init");
-			__disconnect_from_provider();
-			return DP_ERROR_IO_ERROR;
-		}
-		if (pthread_attr_setdetachstate(&thread_attr,
-			PTHREAD_CREATE_DETACHED) != 0) {
-			TRACE_STRERROR
-				("[CRITICAL] pthread_attr_setdetachstate");
-			__disconnect_from_provider();
-			return DP_ERROR_IO_ERROR;
-		}
-		if (pthread_create(&g_interface_event_thread_id,
-				&thread_attr, __dp_interface_event_manager,
-				g_interface_info) != 0) {
-			TRACE_STRERROR("[CRITICAL] pthread_create");
-			__clear_interface();
-			g_interface_event_thread_id = 0;
-			return DP_ERROR_IO_ERROR;
-		}
-	}
-	return DP_ERROR_NONE;
+
+EXIT_CONNECT:
+	CLIENT_MUTEX_UNLOCK(&g_clear_mutex);
+	if (errorcode != DP_ERROR_NONE)
+		__bp_disconnect(__FUNCTION__);
+
+	return errorcode;
 }
 
 static dp_error_type __check_connections()
 {
 	int ret = 0;
 
-	if (g_interface_info == NULL)
+	if (g_dp_client == NULL)
 		if ((ret = __connect_to_provider()) != DP_ERROR_NONE)
 			return ret;
 
-	if (g_interface_info == NULL || g_interface_info->cmd_socket < 0) {
+	if (g_dp_client == NULL || g_dp_client->channel < 0) {
 		TRACE_ERROR("[CHECK IPC]");
 		return DP_ERROR_IO_ERROR;
 	}
 	return DP_ERROR_NONE;
 }
 
-// used frequently
-static dp_error_type __dp_interface_set_string
-	(const int id, const dp_command_type cmd, const char *value)
+static int __dp_ipc_set_binary(const int id, const unsigned property,
+	const bundle_raw *string, const size_t length, const char *funcname)
 {
-	dp_error_type errorcode = DP_ERROR_NONE;
-	if (value == NULL || strlen(value) <= 0) {
-		TRACE_ERROR("[CHECK url]");
+	int errorcode = DP_ERROR_NONE;
+	if (string == NULL || length <= 0) {
+		TRACE_ERROR("%s check binary (%d)", funcname, length);
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
 
 	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
 	DP_CHECK_CONNECTION;
 
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	int fd = g_interface_info->cmd_socket;
-
-	// send commnad with ID
-	errorcode = __ipc_send_command_return(id, cmd);
-	if (errorcode == DP_ERROR_NONE) {
-		// send string
-		errorcode = __ipc_send_string(fd, value);
-		if (errorcode == DP_ERROR_NONE) {
-			// return from provider.
-			errorcode = __ipc_return(fd);
-		}
-	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
-}
-
-static dp_error_type __dp_interface_set_strings
-	(const int id, const dp_command_type cmd, const char **strings,
-	const unsigned count)
-{
-	dp_error_type errorcode = DP_ERROR_NONE;
-	if (strings == NULL || count == 0) {
-		TRACE_ERROR("[CHECK strings]");
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	int fd = g_interface_info->cmd_socket;
-
-	// send commnad with ID
-	errorcode = __ipc_send_command_return(id, cmd);
-	if (errorcode == DP_ERROR_NONE) {
-		if (__ipc_send_int(fd, (int)count) == 0) {
-			int i = 0;
-			for (; i < count; i++) {
-				// send string
-				errorcode = __ipc_send_string(fd, strings[i]);
-				if (errorcode != DP_ERROR_NONE)
-					break;
-			}
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, DP_SEC_SET, property, DP_ERROR_NONE, length * sizeof(unsigned char)) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
+	} else {
+		if (dp_ipc_write(sock, (void*)string, length * sizeof(unsigned char)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
 		} else {
-			errorcode = DP_ERROR_IO_ERROR;
-		}
-		if (errorcode == DP_ERROR_NONE) {
-			// return from provider.
-			errorcode = __ipc_return(fd);
+			errorcode = __dp_ipc_response(sock, id, DP_SEC_SET, property, NULL);
 		}
 	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
 	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
+		__bp_disconnect(funcname);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 	return __dp_interface_convert_errorcode(errorcode);
 }
 
-static dp_error_type __dp_interface_get_string
-	(const int id, const dp_command_type cmd, char **value)
+static int __dp_ipc_set_string(const int id, const short section, const unsigned property,
+	const char *string, const char *funcname)
 {
 	int errorcode = DP_ERROR_NONE;
-	char *recv_str = NULL;
-
-	if (value == NULL) {
-		TRACE_ERROR("[CHECK buffer]");
+	size_t length = 0;
+	if (string == NULL || (length = strlen(string)) <= 0 ||
+			length > DP_MAX_STR_LEN) {
+		TRACE_ERROR("%s check string (%d:%s)", funcname, length, string);
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
 
 	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
 	DP_CHECK_CONNECTION;
 
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	int fd = g_interface_info->cmd_socket;
-
-	errorcode = __ipc_send_command_return(id, cmd);
-	if (errorcode == DP_ERROR_NONE) {
-		// getting state with ID from provider.
-		recv_str = __ipc_read_string(fd);
-		if (recv_str != NULL)
-			*value = recv_str;
-		else
-			errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, length * sizeof(char)) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
+	} else {
+		if (dp_ipc_write(sock, (void*)string, length * sizeof(char)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
+		} else {
+			errorcode = __dp_ipc_response(sock, id, section, property, NULL);
+		}
 	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
 	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
+		__bp_disconnect(funcname);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 	return __dp_interface_convert_errorcode(errorcode);
 }
 
-static dp_error_type __dp_interface_get_strings
-	(const int id, const dp_command_type cmd, const char **strings,
-	const unsigned length, char ***values, unsigned *count)
+static int __dp_ipc_get_string(const int id, const unsigned property,
+	char **string, const char *funcname)
 {
 	int errorcode = DP_ERROR_NONE;
-	int i = 0;
-	int recv_str_index = 0;
-	char **recv_strings = NULL;
 
-	if (values == NULL || count == NULL) {
-		TRACE_ERROR("[CHECK buffer]");
+	if (string == NULL) {
+		TRACE_ERROR("%s check buffer", funcname);
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
-
 	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
 	DP_CHECK_CONNECTION;
 
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	int fd = g_interface_info->cmd_socket;
-
-	errorcode = __ipc_send_command_return(id, cmd);
-	if (errorcode == DP_ERROR_NONE) {
-		if (length > 0 && strings != NULL) {
-			if (__ipc_send_int(fd, (int)length) == 0) {
-				for (i = 0; i < length; i++) {
-					// send string
-					errorcode = __ipc_send_string(fd, strings[i]);
-					if (errorcode != DP_ERROR_NONE)
-						break;
-				}
-			} else {
-				errorcode = DP_ERROR_IO_ERROR;
-			}
-		}
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, DP_SEC_GET, property, DP_ERROR_NONE, 0) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
+	} else {
+		size_t string_length = 0;
+		*string = NULL;
+		errorcode = __dp_ipc_response(sock, id, DP_SEC_GET, property, &string_length);
 		if (errorcode == DP_ERROR_NONE) {
-			// return from provider.
-			errorcode = __ipc_return(fd);
-		}
-	}
-	if (errorcode == DP_ERROR_NONE) {
-		int recv_int = __ipc_read_int(fd);
-		if (recv_int < 0) {
-			errorcode = DP_ERROR_IO_ERROR;
-		} else if (recv_int > 0) {
-			recv_strings = (char **)calloc(recv_int, sizeof(char *));
-			if (recv_strings == NULL) {
-				errorcode = DP_ERROR_OUT_OF_MEMORY;
-			} else {
-				for (i = 0; i < recv_int; i++) {
-					char *recv_str = __ipc_read_string(fd);
-					if (recv_str == NULL) {
-						errorcode =
-							__get_standard_errorcode(DP_ERROR_IO_ERROR);
-						break;
+			if (string_length > 0) {
+				char *recv_str = (char *)calloc((string_length + (size_t)1), sizeof(char));
+				if (recv_str == NULL) {
+					TRACE_STRERROR("check memory length:%d", string_length);
+					errorcode = DP_ERROR_OUT_OF_MEMORY;
+					__dp_ipc_clear_garbage(sock, string_length);
+				} else {
+					if (dp_ipc_read(sock, recv_str, string_length, funcname) <= 0) {
+						errorcode = DP_ERROR_IO_ERROR;
+						free(recv_str);
 					} else {
-						recv_strings[recv_str_index++] = recv_str;
+						recv_str[string_length] = '\0';
+						*string = recv_str;
 					}
 				}
-			}
-		}
-		if (errorcode == DP_ERROR_NONE) {
-			*count = recv_str_index;
-			*values = recv_strings;
-		} else {
-			*count = 0;
-			for (i = 0; i < recv_str_index; i++)
-				free(recv_strings[i]);
-			free(recv_strings);
-		}
-	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
-}
-
-static dp_error_type __dp_interface_get_int
-	(const int id, dp_command_type cmd, int *value)
-{
-	int errorcode = DP_ERROR_NONE;
-	int recv_int = -1;
-
-	if (value == NULL) {
-		TRACE_ERROR("[CHECK buffer]");
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	int fd = g_interface_info->cmd_socket;
-
-	errorcode = __ipc_send_command_return(id, cmd);
-	if (errorcode == DP_ERROR_NONE) {
-		recv_int = __ipc_read_int(fd);
-		if (recv_int >= 0) {
-			*value = recv_int;
-			TRACE_DEBUG("ID : %d recv_int : %d", id, *value);
-		} else {
-			errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
-		}
-	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
-}
-
-static dp_error_type __dp_interface_set_int
-	(const int id, dp_command_type cmd, const int value)
-{
-	int errorcode = DP_ERROR_NONE;
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	int fd = g_interface_info->cmd_socket;
-
-	// send commnad with ID
-	errorcode = __ipc_send_command_return(id, cmd);
-	if (errorcode == DP_ERROR_NONE) {
-		// send string
-		if (__ipc_send_int(fd, value) == 0) {
-			// return from provider.
-			errorcode = __ipc_return(fd);
-		} else {
-			errorcode = DP_ERROR_IO_ERROR;
-		}
-	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
-}
-
-static dp_error_type __dp_interface_set_raw_bundle
-	(const int id, const dp_command_type cmd, int type, const bundle_raw *b, int len)
-{
-	dp_error_type errorcode = DP_ERROR_NONE;
-	if (b == NULL) {
-		TRACE_ERROR("[CHECK bundle]");
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	int fd = g_interface_info->cmd_socket;
-
-	// send commnad with ID
-	errorcode = __ipc_send_command_return(id, cmd);
-	if (errorcode == DP_ERROR_NONE) {
-		// send raw bundle
-		errorcode = __ipc_send_raw_bundle(fd, type, b, len);
-		if (errorcode == DP_ERROR_NONE) {
-			// return from provider.
-			errorcode = __ipc_return(fd);
-		}
-	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
-}
-
-static dp_error_type __dp_interface_get_raw_bundle
-	(const int id, const dp_command_type cmd, int type, bundle_raw **value, int *len)
-{
-	int errorcode = DP_ERROR_NONE;
-
-	if (value == NULL) {
-		TRACE_ERROR("[CHECK buffer]");
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	int fd = g_interface_info->cmd_socket;
-
-	errorcode = __ipc_send_command_return(id, cmd);
-	if (errorcode == DP_ERROR_NONE) {
-		errorcode = __ipc_send_int(fd, type);
-		if(errorcode == 0) {
-			errorcode = __ipc_return(g_interface_info->cmd_socket);
-			if (errorcode == DP_ERROR_NONE) {
-				*len = __ipc_read_bundle(fd, value);
-				if (*len <= 0)
-					errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
 			} else {
-				TRACE_ERROR("[ERROR] Fail to get result for sending type value]");
 				errorcode = DP_ERROR_IO_ERROR;
 			}
-		} else {
-			TRACE_ERROR("[ERROR] Fail to send type]");
-			errorcode = DP_ERROR_IO_ERROR;
 		}
-	} else {
-		TRACE_ERROR("[ERROR] Fail to send command]");
-		errorcode = DP_ERROR_IO_ERROR;
 	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
+
 	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
+		__bp_disconnect(funcname);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 	return __dp_interface_convert_errorcode(errorcode);
 }
 
+// send command and int & return errorcode
+static int __dp_ipc_set_int(const int id, const unsigned section, const unsigned property,
+	const int value, const char *funcname)
+{
+	int errorcode = DP_ERROR_NONE;
+
+	DP_PRE_CHECK_ID;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	DP_CHECK_CONNECTION;
+
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, sizeof(int)) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
+	} else {
+		if (dp_ipc_write(sock, (void *)&value, sizeof(int)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
+		} else {
+			errorcode = __dp_ipc_response(sock, id, section, property, NULL);
+		}
+	}
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__bp_disconnect(funcname);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+// send command & return errorcode and int
+static int __dp_ipc_get_int(const int id, const unsigned property,
+	int *value, const char *funcname)
+{
+	int errorcode = DP_ERROR_NONE;
+
+	if (value == NULL) {
+		TRACE_ERROR("%s check buffer", funcname);
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+
+	DP_PRE_CHECK_ID;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	DP_CHECK_CONNECTION;
+
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, DP_SEC_GET, property, DP_ERROR_NONE, 0) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
+	} else {
+		size_t extra_size = 0;
+		errorcode = __dp_ipc_response(sock, id, DP_SEC_GET, property, &extra_size);
+		if (errorcode == DP_ERROR_NONE) {
+			if (extra_size == sizeof(int)) {
+				if (dp_ipc_read(sock, value, extra_size, funcname) < 0)
+					errorcode = DP_ERROR_IO_ERROR;
+			} else {
+				errorcode = DP_ERROR_IO_ERROR;
+			}
+		}
+	}
+
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__bp_disconnect(funcname);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+// send command & return errorcode.
+int __dp_ipc_echo(const int id, const short section,
+	const unsigned property, const char *funcname)
+{
+	int errorcode = DP_ERROR_NONE;
+
+	DP_PRE_CHECK_ID;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	DP_CHECK_CONNECTION;
+
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, 0) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("%s check ipc sock:%d", funcname, sock);
+	} else {
+		errorcode = __dp_ipc_response(sock, id, section, property, NULL);
+	}
+
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__bp_disconnect(funcname);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
 
 /////////////////////// APIs /////////////////////////////////
 
 int dp_interface_create(int *id)
 {
 	int errorcode = DP_ERROR_NONE;
-	int t_id = 0;
 	int index = -1;
 
 	if (id == NULL) {
@@ -1351,626 +722,267 @@ int dp_interface_create(int *id)
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
 
-	pthread_mutex_lock(&g_function_mutex);
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
 
 	if ((index = __get_empty_slot_index()) < 0) {
 		TRACE_ERROR
 			("[ERROR] TOO_MANY_DOWNLOADS[%d]", MAX_DOWNLOAD_HANDLE);
-		pthread_mutex_unlock(&g_function_mutex);
+		CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 		return DOWNLOAD_ADAPTOR_ERROR_TOO_MANY_DOWNLOADS;
 	}
 
 	DP_CHECK_CONNECTION;
 
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	errorcode = __ipc_send_command_return(-1, DP_CMD_CREATE);
-	if (errorcode == DP_ERROR_NONE) {
-		// getting state with ID from provider.
-		t_id = __ipc_read_download_id(g_interface_info->cmd_socket);
-		if (t_id > 0) {
-			*id = t_id;
-			g_interface_slots[index].id = t_id;
-			g_interface_slots[index].callback.state = NULL;
-			g_interface_slots[index].callback.state_data = NULL;
-			g_interface_slots[index].callback.progress = NULL;
-			g_interface_slots[index].callback.progress_data = NULL;
-			errorcode = DP_ERROR_NONE;
+	dp_ipc_fmt *ipc_info = NULL;
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, -1, DP_SEC_CONTROL, DP_PROP_CREATE, DP_ERROR_NONE, 0) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+	} else {
+		ipc_info = dp_ipc_get_fmt(sock);
+		if (ipc_info == NULL) {
+			TRACE_ERROR("[ERROR] IPC INFO is NULL");
+			errorcode = DP_ERROR_IO_ERROR;
+		} else if (ipc_info->section != DP_SEC_CONTROL ||
+				ipc_info->property != DP_PROP_CREATE ||
+				ipc_info->size != 0) {
+			TRACE_ERROR("sock:%d id:%d section:%d property:%d size:%d",
+				sock, ipc_info->id, ipc_info->section, ipc_info->property,
+				ipc_info->size);
+			errorcode = DP_ERROR_IO_ERROR;
 		} else {
-			errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
+			TRACE_DEBUG("download_id:%d", ipc_info->id);
+			if (errorcode == DP_ERROR_NONE && ipc_info->id > 0) {
+				*id = ipc_info->id;
+				g_interface_slots[index].id = ipc_info->id;
+				g_interface_slots[index].state = NULL;
+				g_interface_slots[index].state_data = NULL;
+				g_interface_slots[index].progress = NULL;
+				g_interface_slots[index].progress_data = NULL;
+			}
 		}
 	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
+	free(ipc_info);
 	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
+		__bp_disconnect(__FUNCTION__);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 	return __dp_interface_convert_errorcode(errorcode);
 }
 
 int dp_interface_destroy(const int id)
 {
 	int index = -1;
-	int errorcode = DP_ERROR_NONE;
-
 	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
 	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
 
 	if ((index = __get_my_slot_index(id)) >= 0) {
 		g_interface_slots[index].id = 0;
-		g_interface_slots[index].callback.state = NULL;
-		g_interface_slots[index].callback.state_data = NULL;
-		g_interface_slots[index].callback.progress = NULL;
-		g_interface_slots[index].callback.progress_data = NULL;
+		g_interface_slots[index].state = NULL;
+		g_interface_slots[index].state_data = NULL;
+		g_interface_slots[index].progress = NULL;
+		g_interface_slots[index].progress_data = NULL;
 	}
-	errorcode = __ipc_send_command_return(id, DP_CMD_DESTROY);
-	if (errorcode == DP_ERROR_NONE) {
-		// after getting errorcode, send FREE to provider.
-		// send again DP_CMD_FREE with ID.
-		errorcode = __ipc_send_command
-			(g_interface_info->cmd_socket, id, DP_CMD_FREE);
-	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_ipc_echo(id, DP_SEC_CONTROL, DP_PROP_DESTROY, __FUNCTION__);
 }
 
 int dp_interface_start(const int id)
 {
-	int errorcode = DP_ERROR_NONE;
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	errorcode = __ipc_send_command_return(id, DP_CMD_START);
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
+	return __dp_ipc_echo(id, DP_SEC_CONTROL, DP_PROP_START, __FUNCTION__);
 }
 
 int dp_interface_pause(const int id)
 {
-	int errorcode = DP_ERROR_NONE;
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	errorcode = __ipc_send_command_return(id, DP_CMD_PAUSE);
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
+	return __dp_ipc_echo(id, DP_SEC_CONTROL, DP_PROP_PAUSE, __FUNCTION__);
 }
 
 int dp_interface_cancel(const int id)
 {
-	int errorcode = DP_ERROR_NONE;
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	errorcode = __ipc_send_command_return(id, DP_CMD_CANCEL);
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
+	return __dp_ipc_echo(id, DP_SEC_CONTROL, DP_PROP_CANCEL, __FUNCTION__);
 }
 
 int dp_interface_set_url(const int id, const char *url)
 {
-	return __dp_interface_set_string(id, DP_CMD_SET_URL, url);
+	if (url == NULL)
+		return __dp_ipc_echo(id, DP_SEC_UNSET, DP_PROP_URL, __FUNCTION__);
+	return __dp_ipc_set_string(id, DP_SEC_SET, DP_PROP_URL, url, __FUNCTION__);
 }
 
 int dp_interface_get_url(const int id, char **url)
 {
-	return __dp_interface_get_string(id, DP_CMD_GET_URL, url);
+	return __dp_ipc_get_string(id, DP_PROP_URL, url, __FUNCTION__);
+}
+
+int dp_interface_set_destination(const int id, const char *path)
+{
+	if (path == NULL)
+		return __dp_ipc_echo(id, DP_SEC_UNSET, DP_PROP_DESTINATION, __FUNCTION__);
+	return __dp_ipc_set_string(id, DP_SEC_SET, DP_PROP_DESTINATION, path, __FUNCTION__);
+}
+
+int dp_interface_get_destination(const int id, char **path)
+{
+	return __dp_ipc_get_string(id, DP_PROP_DESTINATION, path, __FUNCTION__);
+}
+
+int dp_interface_set_file_name(const int id, const char *file_name)
+{
+	if (file_name == NULL)
+		return __dp_ipc_echo(id, DP_SEC_UNSET, DP_PROP_FILENAME, __FUNCTION__);
+	return __dp_ipc_set_string(id, DP_SEC_SET, DP_PROP_FILENAME, file_name, __FUNCTION__);
+}
+
+int dp_interface_get_file_name(const int id, char **file_name)
+{
+	return __dp_ipc_get_string(id, DP_PROP_FILENAME, file_name, __FUNCTION__);
+}
+
+int dp_interface_get_downloaded_file_path(const int id, char **path)
+{
+	return __dp_ipc_get_string(id, DP_PROP_SAVED_PATH, path, __FUNCTION__);
+}
+
+int dp_interface_get_temp_path(const int id, char **temp_path)
+{
+	return __dp_ipc_get_string(id, DP_PROP_TEMP_SAVED_PATH, temp_path, __FUNCTION__);
+}
+
+int dp_interface_get_content_name(const int id, char **content_name)
+{
+	return __dp_ipc_get_string(id, DP_PROP_CONTENT_NAME, content_name, __FUNCTION__);
+}
+
+int dp_interface_get_etag(const int id, char **etag)
+{
+	return __dp_ipc_get_string(id, DP_PROP_ETAG, etag, __FUNCTION__);
+}
+
+int dp_interface_set_temp_file_path(const int id, const char *path)
+{
+	return __dp_ipc_set_string(id, DP_SEC_SET, DP_PROP_TEMP_SAVED_PATH, path, __FUNCTION__);
 }
 
 int dp_interface_set_network_type(const int id, int net_type)
 {
-	return __dp_interface_set_int(id, DP_CMD_SET_NETWORK_TYPE,
-		__dp_interface_convert_network_adaptor(net_type));
+	return __dp_ipc_set_int(id, DP_SEC_SET, DP_PROP_NETWORK_TYPE,
+		net_type, __FUNCTION__);
 }
 
 int dp_interface_get_network_type(const int id, int *net_type)
 {
 	if (net_type == NULL) {
-		TRACE_ERROR("[CHECK buffer]");
+		TRACE_ERROR("check buffer");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
-	int network_type = DP_NETWORK_TYPE_ALL;
-	int ret = __dp_interface_get_int
-		(id, DP_CMD_GET_NETWORK_TYPE, &network_type);
-	if (ret == DOWNLOAD_ADAPTOR_ERROR_NONE)
-		*net_type =
-			__dp_interface_convert_network_provider(network_type);
-	return ret;
+	return __dp_ipc_get_int(id, DP_PROP_NETWORK_TYPE, net_type, __FUNCTION__);
 }
 
-int dp_interface_set_destination(const int id, const char *path)
+int dp_interface_get_network_bonding(const int id, int *enable)
 {
-	return __dp_interface_set_string(id, DP_CMD_SET_DESTINATION, path);
-}
-
-
-int dp_interface_get_destination(const int id, char **path)
-{
-	return __dp_interface_get_string(id, DP_CMD_GET_DESTINATION, path);
-}
-
-int dp_interface_set_file_name(const int id, const char *file_name)
-{
-	return __dp_interface_set_string(id, DP_CMD_SET_FILENAME, file_name);
-}
-
-int dp_interface_get_file_name(const int id, char **file_name)
-{
-	return __dp_interface_get_string(id, DP_CMD_GET_FILENAME, file_name);
-}
-
-int dp_interface_set_ongoing_notification(const int id, int enable)
-{
-	return dp_interface_set_notification(id, enable);
-}
-
-int dp_interface_set_notification(const int id, int enable)
-{
-	return __dp_interface_set_int(id, DP_CMD_SET_NOTIFICATION, enable);
-}
-
-int dp_interface_get_ongoing_notification(const int id, int *enable)
-{
-	return dp_interface_get_notification(id, enable);
-}
-
-int dp_interface_get_notification(const int id, int *enable)
-{
-	return __dp_interface_get_int(id, DP_CMD_GET_NOTIFICATION, enable);
-}
-
-int dp_interface_get_downloaded_file_path(const int id, char **path)
-{
-	return __dp_interface_get_string(id, DP_CMD_GET_SAVED_PATH, path);
-}
-
-int dp_interface_set_notification_extra_param(const int id, char *key,
-	char *value)
-{
-#if 0
-	DP_PRE_CHECK_ID;
-
-	if (key == NULL || value == NULL) {
-		TRACE_ERROR("[CHECK param]");
+	if (enable == NULL) {
+		TRACE_ERROR("check buffer");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	// send commnad with ID
-	if (__ipc_send_command
-		(g_interface_info->cmd_socket, id, DP_CMD_SET_EXTRA_PARAM)
-		!= DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-	if (__ipc_send_string(g_interface_info->cmd_socket, key)
-		!= DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-
-	if (__ipc_send_string(g_interface_info->cmd_socket, value)
-		!= DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-
-	int errorcode =
-		__ipc_return(g_interface_info->cmd_socket);
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR) {
-		TRACE_ERROR("[CHECK IO] (%d)", id);
-		__disconnect_from_provider();
-	}
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
-#endif
-	return DOWNLOAD_ADAPTOR_ERROR_NONE;
+	return __dp_ipc_get_int(id, DP_PROP_NETWORK_BONDING, enable, __FUNCTION__);
 }
 
-int dp_interface_get_notification_extra_param(const int id, char **key,
-	char **value)
+int dp_interface_set_network_bonding(const int id, int enable)
 {
-#if 0
-	int errorcode = DP_ERROR_NONE;
-	char *key_str = NULL;
-	char *value_str = NULL;
-
-	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	errorcode = __ipc_send_command_return(id, DP_CMD_GET_EXTRA_PARAM);
-	if (errorcode != DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		if (errorcode == DP_ERROR_IO_ERROR)
-			__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return __dp_interface_convert_errorcode(errorcode);
-	}
-	// getting state with ID from provider.
-	key_str = __ipc_read_string(g_interface_info->cmd_socket);
-	if (key_str == NULL) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
-		if (errorcode == DP_ERROR_IO_ERROR)
-			__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return __dp_interface_convert_errorcode(errorcode);
-	}
-
-	value_str = __ipc_read_string(g_interface_info->cmd_socket);
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (value_str == NULL) {
-		free(key_str);
-		errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
-		if (errorcode == DP_ERROR_IO_ERROR)
-			__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return __dp_interface_convert_errorcode(errorcode);
-	}
-
-	*key = key_str;
-	*value = value_str;
-	pthread_mutex_unlock(&g_function_mutex);
-#endif
-	return DOWNLOAD_ADAPTOR_ERROR_NONE;
-}
-
-int dp_interface_add_http_header_field(const int id, const char *field,
-	const char *value)
-{
-	int errorcode = DP_ERROR_NONE;
-
-	DP_PRE_CHECK_ID;
-
-	if (field == NULL || value == NULL) {
-		TRACE_ERROR("[CHECK field or value]");
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	// send commnad with ID
-	if (__ipc_send_command_return(id, DP_CMD_SET_HTTP_HEADER) !=
-			DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-
-	if (__ipc_send_string(g_interface_info->cmd_socket, field)
-		!= DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-
-	if (__ipc_send_string(g_interface_info->cmd_socket, value)
-		!= DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-	// return from provider.
-	errorcode = __ipc_return(g_interface_info->cmd_socket);
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR) {
-		TRACE_ERROR("[CHECK IO] (%d)", id);
-		__disconnect_from_provider();
-	}
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
-}
-
-int dp_interface_get_http_header_field(const int id, const char *field,
-	char **value)
-{
-	int errorcode = DP_ERROR_NONE;
-	char *str = NULL;
-
-	DP_PRE_CHECK_ID;
-
-	if (field == NULL || value == NULL) {
-		TRACE_ERROR("[CHECK field or value]");
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	if (__ipc_send_command_return(id, DP_CMD_GET_HTTP_HEADER) != 
-			DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-
-	if (__ipc_send_string(g_interface_info->cmd_socket, field)
-		!= DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-
-	errorcode = __ipc_return(g_interface_info->cmd_socket);
-	if (errorcode == DP_ERROR_NONE) {
-		// getting string with ID from provider.
-		str = __ipc_read_string(g_interface_info->cmd_socket);
-		if (str != NULL) {
-			*value = str;
-		} else {
-			errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
-		}
-	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR || str == NULL)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
-}
-
-int dp_interface_get_http_header_field_list(const int id, char ***fields,
-	int *length)
-{
-	return __dp_interface_get_strings(id, DP_CMD_GET_HTTP_HEADER_LIST,
-		NULL, 0, fields, (unsigned *)length);
-}
-
-int dp_interface_remove_http_header_field(const int id,
-	const char *field)
-{
-	int errorcode = DP_ERROR_NONE;
-
-	DP_PRE_CHECK_ID;
-
-	if (field == NULL) {
-		TRACE_ERROR("[CHECK field]");
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	pthread_mutex_lock(&g_function_mutex);
-
-	DP_CHECK_CONNECTION;
-
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	// send commnad with ID
-	if (__ipc_send_command_return(id, DP_CMD_DEL_HTTP_HEADER) !=
-			DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-	if (__ipc_send_string(g_interface_info->cmd_socket, field)
-		!= DP_ERROR_NONE) {
-		pthread_mutex_unlock(&g_interface_info->mutex);
-		__disconnect_from_provider();
-		pthread_mutex_unlock(&g_function_mutex);
-		return DOWNLOAD_ADAPTOR_ERROR_IO_ERROR;
-	}
-	// return from provider.
-	errorcode = __ipc_return(g_interface_info->cmd_socket);
-	pthread_mutex_unlock(&g_interface_info->mutex);
-	if (errorcode == DP_ERROR_IO_ERROR) {
-		TRACE_ERROR("[CHECK IO] (%d)", id);
-		__disconnect_from_provider();
-	}
-	pthread_mutex_unlock(&g_function_mutex);
-	return __dp_interface_convert_errorcode(errorcode);
+	return __dp_ipc_set_int(id, DP_SEC_SET, DP_PROP_NETWORK_BONDING,
+		enable, __FUNCTION__);
 }
 
 int dp_interface_set_state_changed_cb(const int id,
 	dp_interface_state_changed_cb callback, void *user_data)
 {
-	int errorcode = DP_ERROR_NONE;
-	int index = -1;
-
-	if (callback == NULL) {
-		dp_interface_unset_state_changed_cb(id);
-		return DOWNLOAD_ADAPTOR_ERROR_NONE;
-	}
-
-	errorcode =
-		__dp_interface_set_int(id, DP_CMD_SET_STATE_CALLBACK, 1);
+	int errorcode = __dp_ipc_echo(id, DP_SEC_SET, DP_PROP_STATE_CALLBACK, __FUNCTION__);
 	if (errorcode == DOWNLOAD_ADAPTOR_ERROR_NONE) {
-		pthread_mutex_lock(&g_function_mutex);
-		// search same info in array.
-		index = __get_my_slot_index(id);
+		CLIENT_MUTEX_LOCK(&g_function_mutex);
+		int index = __get_my_slot_index(id);
 		if (index < 0) {
 			index = __get_empty_slot_index();
 			if (index >= 0) {
 				g_interface_slots[index].id = id;
 			} else {
-				TRACE_ERROR("[ERROR] TOO_MANY_DOWNLOADS [%d]",
+				TRACE_ERROR("too many download limit:%d",
 					MAX_DOWNLOAD_HANDLE);
 				errorcode = DOWNLOAD_ADAPTOR_ERROR_TOO_MANY_DOWNLOADS;
 			}
 		}
 		if (index >= 0) {
-			g_interface_slots[index].callback.state = callback;
-			g_interface_slots[index].callback.state_data = user_data;
+			g_interface_slots[index].state = callback;
+			g_interface_slots[index].state_data = user_data;
 		}
-		pthread_mutex_unlock(&g_function_mutex);
+		CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 	}
 	return errorcode;
 }
 
 int dp_interface_unset_state_changed_cb(const int id)
 {
-	int errorcode = DP_ERROR_NONE;
-	int index = -1;
-
-	errorcode =
-		__dp_interface_set_int(id, DP_CMD_SET_STATE_CALLBACK, 0);
-	// clear by force although failed to clear in provider
-	pthread_mutex_lock(&g_function_mutex);
-	if ((index = __get_my_slot_index(id)) >= 0) {
-		g_interface_slots[index].callback.state = NULL;
-		g_interface_slots[index].callback.state_data = NULL;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	int index = __get_my_slot_index(id);
+	if (index >= 0) {
+		g_interface_slots[index].state = NULL;
+		g_interface_slots[index].state_data = NULL;
 	}
-	pthread_mutex_unlock(&g_function_mutex);
-	return errorcode;
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	if (index < 0)
+		return DOWNLOAD_ADAPTOR_ERROR_ID_NOT_FOUND;
+	return __dp_ipc_echo(id, DP_SEC_UNSET, DP_PROP_STATE_CALLBACK, __FUNCTION__);
 }
 
 int dp_interface_set_progress_cb(const int id,
 	dp_interface_progress_cb callback, void *user_data)
 {
-	int errorcode = DP_ERROR_NONE;
-	int index = -1;
-
-	if (callback == NULL) {
-		dp_interface_unset_progress_cb(id);
-		return DOWNLOAD_ADAPTOR_ERROR_NONE;
-	}
-
-	errorcode =
-		__dp_interface_set_int(id, DP_CMD_SET_PROGRESS_CALLBACK, 1);
+	int errorcode = __dp_ipc_echo(id, DP_SEC_SET, DP_PROP_PROGRESS_CALLBACK, __FUNCTION__);
 	if (errorcode == DOWNLOAD_ADAPTOR_ERROR_NONE) {
-		pthread_mutex_lock(&g_function_mutex);
-		// search same info in array.
-		index = __get_my_slot_index(id);
+		CLIENT_MUTEX_LOCK(&g_function_mutex);
+		int index = __get_my_slot_index(id);
 		if (index < 0) {
 			index = __get_empty_slot_index();
 			if (index >= 0) {
 				g_interface_slots[index].id = id;
 			} else {
-				TRACE_ERROR("[ERROR] TOO_MANY_DOWNLOADS [%d]",
+				TRACE_ERROR("too many download limit:%d",
 					MAX_DOWNLOAD_HANDLE);
 				errorcode = DOWNLOAD_ADAPTOR_ERROR_TOO_MANY_DOWNLOADS;
 			}
 		}
 		if (index >= 0) {
-			g_interface_slots[index].callback.progress = callback;
-			g_interface_slots[index].callback.progress_data = user_data;
+			g_interface_slots[index].progress = callback;
+			g_interface_slots[index].progress_data = user_data;
 		}
-		pthread_mutex_unlock(&g_function_mutex);
+		CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 	}
 	return errorcode;
 }
 
 int dp_interface_unset_progress_cb(const int id)
 {
-	int errorcode = DP_ERROR_NONE;
-	int index = -1;
-
-	errorcode =
-		__dp_interface_set_int(id, DP_CMD_SET_PROGRESS_CALLBACK, 0);
-	// clear by force although failed to clear in provider
-	pthread_mutex_lock(&g_function_mutex);
-	if ((index = __get_my_slot_index(id)) >= 0) {
-		g_interface_slots[index].callback.progress = NULL;
-		g_interface_slots[index].callback.progress_data = NULL;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	int index = __get_my_slot_index(id);
+	if (index >= 0) {
+		g_interface_slots[index].progress = NULL;
+		g_interface_slots[index].progress_data = NULL;
 	}
-	pthread_mutex_unlock(&g_function_mutex);
-	return errorcode;
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	if (index < 0)
+		return DOWNLOAD_ADAPTOR_ERROR_ID_NOT_FOUND;
+	return __dp_ipc_echo(id, DP_SEC_UNSET, DP_PROP_PROGRESS_CALLBACK, __FUNCTION__);
 }
 
 int dp_interface_get_state(const int id, int *state)
 {
 	if (state == NULL) {
-		TRACE_ERROR("[CHECK buffer]");
+		TRACE_ERROR("check buffer");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
-	int statecode = DOWNLOAD_ADPATOR_STATE_NONE;
-	int ret = __dp_interface_get_int(id, DP_CMD_GET_STATE, &statecode);
-	if (ret == DOWNLOAD_ADAPTOR_ERROR_NONE)
-		*state = __dp_interface_convert_state(statecode);
-	return ret;
-}
-
-int dp_interface_get_temp_path(const int id, char **temp_path)
-{
-	return __dp_interface_get_string
-		(id, DP_CMD_GET_TEMP_SAVED_PATH, temp_path);
-}
-
-int dp_interface_get_content_name(const int id, char **content_name)
-{
-	return __dp_interface_get_string
-		(id, DP_CMD_GET_CONTENT_NAME, content_name);
+	int dp_state = DP_STATE_NONE;
+	int errorcode =  __dp_ipc_get_int(id, DP_PROP_STATE, &dp_state, __FUNCTION__);
+	if (errorcode == DOWNLOAD_ADAPTOR_ERROR_NONE)
+		*state = __dp_interface_convert_state(dp_state);
+	return errorcode;
 }
 
 int dp_interface_get_content_size(const int id,
@@ -1979,60 +991,72 @@ int dp_interface_get_content_size(const int id,
 	int errorcode = DP_ERROR_NONE;
 
 	if (content_size == NULL) {
-		TRACE_ERROR("[CHECK buffer content_size]");
+		TRACE_ERROR("check buffer");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
 
 	DP_PRE_CHECK_ID;
-
-	pthread_mutex_lock(&g_function_mutex);
-
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
 	DP_CHECK_CONNECTION;
 
-	pthread_mutex_lock(&g_interface_info->mutex);
-
-	DP_CHECK_PROVIDER_STATUS;
-
-	errorcode =
-		__ipc_send_command_return(id, DP_CMD_GET_TOTAL_FILE_SIZE);
-	if (errorcode == DP_ERROR_NONE) {
-		// getting content_size from provider.
-		if (__ipc_read_custom_type(g_interface_info->cmd_socket,
-				content_size, sizeof(unsigned long long)) < 0) {
-			errorcode = __get_standard_errorcode(DP_ERROR_IO_ERROR);
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, DP_SEC_GET, DP_PROP_TOTAL_FILE_SIZE, DP_ERROR_NONE, 0) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("%s check ipc sock:%d", __FUNCTION__, sock);
+	} else {
+		size_t extra_size = 0;
+		errorcode = __dp_ipc_response(sock, id, DP_SEC_GET, DP_PROP_TOTAL_FILE_SIZE, &extra_size);
+		if (errorcode == DP_ERROR_NONE) {
+			if (extra_size == sizeof(unsigned long long)) {
+				if (dp_ipc_read(sock, content_size, extra_size, __FUNCTION__) < 0)
+					errorcode = DP_ERROR_IO_ERROR;
+			} else {
+				errorcode = DP_ERROR_IO_ERROR;
+			}
 		}
 	}
-	pthread_mutex_unlock(&g_interface_info->mutex);
+
 	if (errorcode == DP_ERROR_IO_ERROR)
-		__disconnect_from_provider();
-	pthread_mutex_unlock(&g_function_mutex);
+		__bp_disconnect(__FUNCTION__);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
 	return __dp_interface_convert_errorcode(errorcode);
 }
 
 int dp_interface_get_mime_type(const int id, char **mime_type)
 {
-	return __dp_interface_get_string
-		(id, DP_CMD_GET_MIME_TYPE, mime_type);
+	if (mime_type == NULL) {
+		TRACE_ERROR("check buffer");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	return __dp_ipc_get_string(id, DP_PROP_MIME_TYPE, mime_type,
+		__FUNCTION__);
 }
 
 int dp_interface_set_auto_download(const int id, int enable)
 {
-	return __dp_interface_set_int(id, DP_CMD_SET_AUTO_DOWNLOAD, enable);
+	short section = DP_SEC_SET;
+	if (enable <= 0)
+		section = DP_SEC_UNSET;
+	return __dp_ipc_echo(id, section, DP_PROP_AUTO_DOWNLOAD, __FUNCTION__);
 }
 
 int dp_interface_get_auto_download(const int id, int *enable)
 {
-	return __dp_interface_get_int(id, DP_CMD_GET_AUTO_DOWNLOAD, enable);
+	if (enable == NULL) {
+		TRACE_ERROR("check buffer");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	return __dp_ipc_get_int(id, DP_PROP_AUTO_DOWNLOAD, enable, __FUNCTION__);
 }
 
 int dp_interface_get_error(const int id, int *error)
 {
 	if (error == NULL) {
-		TRACE_ERROR("[CHECK buffer error]");
+		TRACE_ERROR("check buffer");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
 	int errorcode = DP_ERROR_NONE;
-	int ret = __dp_interface_get_int(id, DP_CMD_GET_ERROR, &errorcode);
+	int ret = __dp_ipc_get_int(id, DP_PROP_ERROR, &errorcode, __FUNCTION__);
 	if (ret == DOWNLOAD_ADAPTOR_ERROR_NONE)
 		*error = __dp_interface_convert_errorcode(errorcode);
 	return ret;
@@ -2040,107 +1064,497 @@ int dp_interface_get_error(const int id, int *error)
 
 int dp_interface_get_http_status(const int id, int *http_status)
 {
-	return __dp_interface_get_int
-		(id, DP_CMD_GET_HTTP_STATUS, http_status);
-}
-
-int dp_interface_add_noti_extra(const int id, const char *key,
-	const char **values, const unsigned length)
-{
-	int i = 0;
-
-	if (key == NULL || values == NULL) {
-		TRACE_ERROR("[CHECK key/values] (%d)", id);
+	if (http_status == NULL) {
+		TRACE_ERROR("check buffer");
 		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
 	}
-	if (length <= 0) {
-		TRACE_ERROR("[CHECK legnth] (%d)", id);
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	char *strings[length + 1];
-	strings[0] = (char *)key;
-	for (i = 0; i < length; i++) {
-		strings[i + 1] = (char *)values[i];
-	}
-	return __dp_interface_set_strings(id, DP_CMD_ADD_EXTRA_PARAM,
-		(const char **)strings, length + 1);
-}
-
-int dp_interface_get_noti_extra_values(const int id, const char *key,
-	char ***values, unsigned *length)
-{
-	return __dp_interface_get_strings(id, DP_CMD_GET_EXTRA_PARAM,
-		&key, 1, values, length);
-}
-
-int dp_interface_remove_noti_extra_key(const int id, const char *key)
-{
-	return __dp_interface_set_string
-		(id, DP_CMD_REMOVE_EXTRA_PARAM, key);
-}
-
-int dp_interface_set_notification_bundle(const int id, int type, bundle *b)
-{
-	bundle_raw *r = NULL;
-	int len = 0;
-	int retval = -1;
-	retval = bundle_encode_raw(b, &r, &len);
-	if (retval == 0)
-		retval = __dp_interface_set_raw_bundle(id, DP_CMD_SET_NOTIFICATION_BUNDLE, type, r, len);
-	else {
-		bundle_free_encoded_rawdata(&r);
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-	bundle_free_encoded_rawdata(&r);
-	return retval;
-}
-
-int dp_interface_get_notification_bundle(const int id, int type, bundle **b)
-{
-	bundle_raw *r = NULL;
-	int len = 0;
-	download_adaptor_error_e error = DOWNLOAD_ADAPTOR_ERROR_NONE;
-
-	if (b == NULL) {
-		TRACE_ERROR("[CHECK bundle] (%d)", id);
-		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
-	}
-
-	error = __dp_interface_get_raw_bundle(id, DP_CMD_GET_NOTIFICATION_BUNDLE, type, &r, &len);
-	if (error == DOWNLOAD_ADAPTOR_ERROR_NONE) {
-		*b = bundle_decode_raw(r, len);
-	}
-	bundle_free_encoded_rawdata(&r);
-	return error;
+	return __dp_ipc_get_int(id, DP_PROP_HTTP_STATUS, http_status,
+		__FUNCTION__);
 }
 
 int dp_interface_set_notification_title(const int id, const char *title)
 {
-	return __dp_interface_set_string(id, DP_CMD_SET_NOTIFICATION_TITLE, title);
+	if (title == NULL)
+		return __dp_ipc_echo(id, DP_SEC_UNSET, DP_PROP_NOTIFICATION_SUBJECT, __FUNCTION__);
+	return __dp_ipc_set_string(id, DP_SEC_SET, DP_PROP_NOTIFICATION_SUBJECT, title, __FUNCTION__);
 }
 
 int dp_interface_get_notification_title(const int id, char **title)
 {
-	return __dp_interface_get_string(id, DP_CMD_GET_NOTIFICATION_TITLE, title);
+	if (title == NULL) {
+		TRACE_ERROR("check buffer");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	return __dp_ipc_get_string(id, DP_PROP_NOTIFICATION_SUBJECT, title, __FUNCTION__);
 }
 
 int dp_interface_set_notification_description(const int id, const char *description)
 {
-	return __dp_interface_set_string(id, DP_CMD_SET_NOTIFICATION_DESCRIPTION, description);
+	if (description == NULL)
+		return __dp_ipc_echo(id, DP_SEC_UNSET, DP_PROP_NOTIFICATION_DESCRIPTION, __FUNCTION__);
+	return __dp_ipc_set_string(id, DP_SEC_SET, DP_PROP_NOTIFICATION_DESCRIPTION, description, __FUNCTION__);
 }
 
 int dp_interface_get_notification_description(const int id, char **description)
 {
-	return __dp_interface_get_string(id, DP_CMD_GET_NOTIFICATION_DESCRIPTION, description);
+	if (description == NULL) {
+		TRACE_ERROR("check buffer");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	return __dp_ipc_get_string(id, DP_PROP_NOTIFICATION_DESCRIPTION, description, __FUNCTION__);
 }
 
 int dp_interface_set_notification_type(const int id, int type)
 {
-	return __dp_interface_set_int(id, DP_CMD_SET_NOTIFICATION_TYPE, type);
+	if (type == DP_NOTIFICATION_TYPE_NONE)
+		return __dp_ipc_echo(id, DP_SEC_UNSET, DP_PROP_NOTIFICATION_TYPE, __FUNCTION__);
+	return __dp_ipc_set_int(id, DP_SEC_SET, DP_PROP_NOTIFICATION_TYPE, type, __FUNCTION__);
 }
 
 int dp_interface_get_notification_type(const int id, int *type)
 {
-	return __dp_interface_get_int(id, DP_CMD_GET_NOTIFICATION_TYPE, type);
+	if (type == NULL) {
+		TRACE_ERROR("check buffer");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	return __dp_ipc_get_int(id, DP_PROP_NOTIFICATION_TYPE, type, __FUNCTION__);
+}
+
+int dp_interface_set_notification_bundle(const int id, const int type, void *bundle_param)
+{
+	int errorcode = DOWNLOAD_ADAPTOR_ERROR_NONE;
+	if (type != DP_NOTIFICATION_BUNDLE_TYPE_ONGOING &&
+			type !=  DP_NOTIFICATION_BUNDLE_TYPE_COMPLETE &&
+			type !=  DP_NOTIFICATION_BUNDLE_TYPE_FAILED) {
+		TRACE_ERROR("check type:%d id:%d", type, id);
+		errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+		return errorcode;
+	}
+	if (bundle_param == NULL) { // unset
+		return __dp_ipc_set_int(id, DP_SEC_UNSET, DP_PROP_NOTIFICATION_RAW, type, __FUNCTION__);
+	} else { // set
+		int length = 0;
+		bundle_raw *raw_buffer = NULL;
+		int result = bundle_encode_raw(bundle_param, &raw_buffer, &length);
+		if (result == 0 && length > 0) {
+			errorcode = __dp_ipc_set_int(id, DP_SEC_SET, DP_PROP_NOTIFICATION_RAW, type, __FUNCTION__);
+			if (errorcode == DOWNLOAD_ADAPTOR_ERROR_NONE) {
+				errorcode = __dp_ipc_set_binary(id, DP_PROP_NOTIFICATION_RAW, raw_buffer, (size_t)length, __FUNCTION__);
+			}
+		} else {
+			TRACE_ERROR("failed to encode raws error:%d type:%d id:%d", result, type, id);
+			errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+		}
+		if (raw_buffer != NULL)
+			bundle_free_encoded_rawdata(&raw_buffer);
+	}
+	return errorcode;
+}
+
+int dp_interface_get_notification_bundle(const int id, const int type, void **bundle_param)
+{
+	if (bundle_param == NULL) {
+		TRACE_ERROR("check buffer");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	int errorcode = DOWNLOAD_ADAPTOR_ERROR_NONE;
+	if (type != DP_NOTIFICATION_BUNDLE_TYPE_ONGOING &&
+			type !=  DP_NOTIFICATION_BUNDLE_TYPE_COMPLETE &&
+			type !=  DP_NOTIFICATION_BUNDLE_TYPE_FAILED) {
+		TRACE_ERROR("check type:%d id:%d", type, id);
+		errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+		return errorcode;
+	}
+
+	// send type, get errorcode with extra_size, get bundle binary
+
+	errorcode = DP_ERROR_NONE;
+
+	DP_PRE_CHECK_ID;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	DP_CHECK_CONNECTION;
+
+	const unsigned section = DP_SEC_GET;
+	const unsigned property = DP_PROP_NOTIFICATION_RAW;
+	size_t extra_size = 0;
+
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, sizeof(int)) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("check ipc sock:%d", sock);
+	} else {
+		if (dp_ipc_write(sock, (void *)&type, sizeof(int)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			TRACE_ERROR("check ipc sock:%d", sock);
+		} else {
+			errorcode = __dp_ipc_response(sock, id, section, property, &extra_size);
+		}
+	}
+	if (errorcode == DP_ERROR_NONE && extra_size > 0) {
+		unsigned char *recv_raws = (unsigned char *)calloc(extra_size, sizeof(unsigned char));
+		if (recv_raws == NULL) {
+			TRACE_STRERROR("sock:%d check memory length:%d", sock, extra_size);
+			errorcode = DP_ERROR_OUT_OF_MEMORY;
+			__dp_ipc_clear_garbage(sock, extra_size);
+		} else {
+			if (dp_ipc_read(sock, recv_raws, extra_size, __FUNCTION__) <= 0) {
+				TRACE_ERROR("sock:%d check ipc length:%d", sock, extra_size);
+				errorcode = DP_ERROR_IO_ERROR;
+				free(recv_raws);
+			} else {
+				TRACE_DEBUG("sock:%d length:%d raws", sock, extra_size);
+				*bundle_param = bundle_decode_raw(recv_raws, extra_size);
+				free(recv_raws);
+			}
+		}
+	}
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__bp_disconnect(__FUNCTION__);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+int dp_interface_set_notification_service_handle(const int id, const int type, void *handle)
+{
+	int errorcode = DOWNLOAD_ADAPTOR_ERROR_NONE;
+	if (type != DP_NOTIFICATION_SERVICE_TYPE_ONGOING &&
+			type !=  DP_NOTIFICATION_SERVICE_TYPE_COMPLETE &&
+			type !=  DP_NOTIFICATION_SERVICE_TYPE_FAILED) {
+		TRACE_ERROR("check type:%d id:%d", type, id);
+		errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+		return errorcode;
+	}
+	if (handle == NULL) { // unset
+		return __dp_ipc_set_int(id, DP_SEC_UNSET, DP_PROP_NOTIFICATION_RAW, type, __FUNCTION__);
+	} else { // set
+		int length = 0;
+		bundle_raw *raw_buffer = NULL;
+		bundle *bundle_data = NULL;
+		int result = app_control_export_as_bundle((app_control_h) handle, &bundle_data);
+		if (result == APP_CONTROL_ERROR_NONE) {
+			result = bundle_encode_raw(bundle_data, &raw_buffer, &length);
+			if (result == 0 && length > 0) {
+				errorcode = __dp_ipc_set_int(id, DP_SEC_SET, DP_PROP_NOTIFICATION_RAW, type, __FUNCTION__);
+				if (errorcode == DOWNLOAD_ADAPTOR_ERROR_NONE) {
+					errorcode = __dp_ipc_set_binary(id, DP_PROP_NOTIFICATION_RAW, raw_buffer, (size_t)length, __FUNCTION__);
+				}
+			} else {
+				TRACE_ERROR("failed to encode raws error:%d type:%d id:%d", result, type, id);
+				errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+			}
+		} else {
+			TRACE_ERROR("failed to encode service handle error:%d type:%d id:%d", result, type, id);
+			errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+		}
+		if (raw_buffer != NULL)
+			bundle_free_encoded_rawdata(&raw_buffer);
+		if (bundle_data != NULL)
+			bundle_free(bundle_data);
+	}
+	return errorcode;
+}
+
+int dp_interface_get_notification_service_handle(const int id, const int type, void **handle)
+{
+	bundle *bundle_data = NULL;
+	if (handle == NULL) {
+		TRACE_ERROR("check buffer");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	int errorcode = DOWNLOAD_ADAPTOR_ERROR_NONE;
+	if (type != DP_NOTIFICATION_SERVICE_TYPE_ONGOING &&
+			type !=  DP_NOTIFICATION_SERVICE_TYPE_COMPLETE &&
+			type !=  DP_NOTIFICATION_SERVICE_TYPE_FAILED) {
+		TRACE_ERROR("check type:%d id:%d", type, id);
+		errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+		return errorcode;
+	}
+
+	// send type, get errorcode with extra_size, get bundle binary
+
+	errorcode = DP_ERROR_NONE;
+
+	DP_PRE_CHECK_ID;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	DP_CHECK_CONNECTION;
+
+	const unsigned section = DP_SEC_GET;
+	const unsigned property = DP_PROP_NOTIFICATION_RAW;
+	size_t extra_size = 0;
+
+	int sock = DP_CHECK_IPC_SOCK;
+	if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, sizeof(int)) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("check ipc sock:%d", sock);
+	} else {
+		if (dp_ipc_write(sock, (void *)&type, sizeof(int)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			TRACE_ERROR("check ipc sock:%d", sock);
+		} else {
+			errorcode = __dp_ipc_response(sock, id, section, property, &extra_size);
+		}
+	}
+	if (errorcode == DP_ERROR_NONE && extra_size > 0) {
+		unsigned char *recv_raws = (unsigned char *)calloc(extra_size, sizeof(unsigned char));
+		if (recv_raws == NULL) {
+			TRACE_STRERROR("sock:%d check memory length:%d", sock, extra_size);
+			errorcode = DP_ERROR_OUT_OF_MEMORY;
+			__dp_ipc_clear_garbage(sock, extra_size);
+		} else {
+			if (dp_ipc_read(sock, recv_raws, extra_size, __FUNCTION__) <= 0) {
+				TRACE_ERROR("sock:%d check ipc length:%d", sock, extra_size);
+				errorcode = DP_ERROR_IO_ERROR;
+				free(recv_raws);
+			} else {
+				TRACE_DEBUG("sock:%d length:%d raws", sock, extra_size);
+
+				bundle_data = bundle_decode_raw(recv_raws, extra_size);
+				if (bundle_data) {
+					int result = 0;
+					result = app_control_create((app_control_h *)handle);
+					if (result ==	APP_CONTROL_ERROR_NONE) {
+						result = app_control_import_from_bundle((app_control_h)*handle, bundle_data);
+						if (result !=	APP_CONTROL_ERROR_NONE) {
+							TRACE_ERROR("failed to import service handle error:%d type:%d id:%d", result, type, id);
+							errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+						}
+					} else {
+						TRACE_ERROR("failed to create service handle error:%d type:%d id:%d", result, type, id);
+						errorcode = DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+					}
+					bundle_free(bundle_data);
+				}
+				free(recv_raws);
+			}
+		}
+	}
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__bp_disconnect(__FUNCTION__);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+int dp_interface_add_http_header_field(const int id, const char *field,
+	const char *value)
+{
+	// cmd + field string + value string
+	// wait response
+	int errorcode = DP_ERROR_NONE;
+	size_t field_length = 0;
+	size_t value_length = 0;
+	if (field == NULL || (field_length = strlen(field)) <= 0 ||
+			field_length > DP_MAX_STR_LEN) {
+		TRACE_ERROR("check field (%d:%s)", field_length, field);
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	if (value == NULL || (value_length = strlen(value)) <= 0 ||
+			value_length > DP_MAX_STR_LEN) {
+		TRACE_ERROR("check value (%d:%s)", value_length, value);
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+
+	DP_PRE_CHECK_ID;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	DP_CHECK_CONNECTION;
+
+	int sock = DP_CHECK_IPC_SOCK;
+	short section = DP_SEC_SET;
+	unsigned property = DP_PROP_HTTP_HEADER;
+	if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, field_length * sizeof(char)) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("check ipc sock:%d", sock);
+	} else {
+		if (dp_ipc_write(sock, (void*)field, field_length * sizeof(char)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			TRACE_ERROR("check ipc sock:%d", sock);
+		} else {
+			errorcode = __dp_ipc_response(sock, id, section, property, NULL);
+			if (errorcode == DP_ERROR_NONE) {
+				if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, value_length * sizeof(char)) < 0) {
+					errorcode = DP_ERROR_IO_ERROR;
+					TRACE_ERROR("check ipc sock:%d", sock);
+				} else {
+					if (dp_ipc_write(sock, (void*)value, value_length * sizeof(char)) < 0) {
+						errorcode = DP_ERROR_IO_ERROR;
+						TRACE_ERROR("check ipc sock:%d", sock);
+					} else {
+						errorcode = __dp_ipc_response(sock, id, section, property, NULL);
+					}
+				}
+			}
+		}
+	}
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__bp_disconnect(__FUNCTION__);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+int dp_interface_get_http_header_field(const int id, const char *field,
+	char **value)
+{
+	// cmd + field string
+	// wait response + value string
+	int errorcode = DP_ERROR_NONE;
+	size_t length = 0;
+	if (field == NULL || (length = strlen(field)) <= 0 ||
+			length > DP_MAX_STR_LEN) {
+		TRACE_ERROR("check field (%d:%s)", length, field);
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	if (value == NULL) {
+		TRACE_ERROR("check pointer for value");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+
+	DP_PRE_CHECK_ID;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	DP_CHECK_CONNECTION;
+
+	int sock = DP_CHECK_IPC_SOCK;
+	short section = DP_SEC_GET;
+	unsigned property = DP_PROP_HTTP_HEADER;
+	if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, length * sizeof(char)) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("check ipc sock:%d", sock);
+	} else {
+		if (dp_ipc_write(sock, (void*)field, length * sizeof(char)) < 0) {
+			errorcode = DP_ERROR_IO_ERROR;
+			TRACE_ERROR("check ipc sock:%d", sock);
+		} else {
+			size_t string_length = 0;
+			*value = NULL;
+			errorcode = __dp_ipc_response(sock, id, section, property, &string_length);
+			if (errorcode == DP_ERROR_NONE) {
+				if (string_length > 0) {
+					char *recv_str = (char *)calloc((string_length + (size_t)1), sizeof(char));
+					if (recv_str == NULL) {
+						TRACE_STRERROR("check memory length:%d", string_length);
+						errorcode = DP_ERROR_OUT_OF_MEMORY;
+						__dp_ipc_clear_garbage(sock, string_length);
+					} else {
+						if (dp_ipc_read(sock, recv_str, string_length, __FUNCTION__) <= 0) {
+							errorcode = DP_ERROR_IO_ERROR;
+							free(recv_str);
+						} else {
+							recv_str[string_length] = '\0';
+							*value = recv_str;
+						}
+					}
+				} else {
+					errorcode = DP_ERROR_IO_ERROR;
+				}
+			}
+		}
+	}
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__bp_disconnect(__FUNCTION__);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+int dp_interface_get_http_header_field_list(const int id, char ***fields,
+	int *length)
+{
+	// cmd
+	// wait response
+	// wait size
+	// wait strings
+	int errorcode = DP_ERROR_NONE;
+	if (fields == NULL) {
+		TRACE_ERROR("check pointer for fields");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+	if (length == NULL) {
+		TRACE_ERROR("check pointer for length");
+		return DOWNLOAD_ADAPTOR_ERROR_INVALID_PARAMETER;
+	}
+
+	DP_PRE_CHECK_ID;
+	CLIENT_MUTEX_LOCK(&g_function_mutex);
+	DP_CHECK_CONNECTION;
+
+	int sock = DP_CHECK_IPC_SOCK;
+	short section = DP_SEC_GET;
+	unsigned property = DP_PROP_HTTP_HEADERS;
+	if (dp_ipc_query(sock, id, section, property, DP_ERROR_NONE, 0) < 0) {
+		errorcode = DP_ERROR_IO_ERROR;
+		TRACE_ERROR("check ipc sock:%d", sock);
+	} else {
+
+		int array_size = 0;
+		size_t extra_size = 0;
+		errorcode = __dp_ipc_response(sock, id, section, property, &extra_size);
+		if (errorcode == DP_ERROR_NONE) {
+			if (extra_size == sizeof(int)) {
+				if (dp_ipc_read(sock, &array_size, extra_size, __FUNCTION__) < 0) {
+					errorcode = DP_ERROR_IO_ERROR;
+				} else {
+					if (array_size <= 0) {
+						errorcode = DP_ERROR_NO_DATA;
+						*length = 0;
+					} else {
+						int i = 0;
+						char **recv_strings = NULL;
+						recv_strings = (char **)calloc(array_size, sizeof(char *));
+						if (recv_strings == NULL) {
+							TRACE_STRERROR("check memory size:%d", array_size);
+							errorcode = DP_ERROR_OUT_OF_MEMORY;
+							*length = 0;
+						} else {
+							// get strings.
+							for (; i < array_size; i++) {
+								size_t string_length = 0;
+								errorcode = __dp_ipc_response(sock, id, section, property, &string_length);
+								recv_strings[i] = NULL;
+								if (errorcode == DP_ERROR_NONE && string_length > 0) {
+									char *recv_str = (char *)calloc((string_length + (size_t)1), sizeof(char));
+									if (recv_str == NULL) {
+										TRACE_STRERROR("check memory length:%d", string_length * sizeof(char));
+										errorcode = DP_ERROR_OUT_OF_MEMORY;
+										break;
+									} else {
+										if (dp_ipc_read(sock, recv_str, string_length, __FUNCTION__) <= 0) {
+											errorcode = DP_ERROR_IO_ERROR;
+											free(recv_str);
+										} else {
+											recv_str[string_length] = '\0';
+											recv_strings[i] = recv_str;
+										}
+									}
+								}
+							}
+							*fields = recv_strings;
+						}
+						if (errorcode != DP_ERROR_NONE) { // if error, free all allocated memories
+							int j = 0;
+							for (; j < i; j++) {
+								free(recv_strings[j]);
+							}
+							free(recv_strings);
+							*length = 0;
+							*fields = NULL;
+							if (errorcode != DP_ERROR_IO_ERROR)
+								__bp_disconnect(__FUNCTION__); // clear IPC, can not expect the size of futher packets
+						}
+						*length = i;
+					}
+				}
+			} else {
+				errorcode = DP_ERROR_IO_ERROR;
+			}
+		}
+
+
+	}
+	if (errorcode == DP_ERROR_IO_ERROR)
+		__bp_disconnect(__FUNCTION__);
+	CLIENT_MUTEX_UNLOCK(&g_function_mutex);
+	return __dp_interface_convert_errorcode(errorcode);
+}
+
+int dp_interface_remove_http_header_field(const int id,
+	const char *field)
+{
+	return __dp_ipc_set_string(id, DP_SEC_UNSET, DP_PROP_HTTP_HEADER, field, __FUNCTION__);
 }

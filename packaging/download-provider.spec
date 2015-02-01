@@ -1,38 +1,44 @@
+%define _ux_define tizen2.3
 Name:       download-provider
-Summary:    download the contents in background.
-Version:    1.1.6
+Summary:    Download the contents in background
+Version:    2.1.23
 Release:    0
 Group:      Development/Libraries
 License:    Apache License, Version 2.0
 Source0:    %{name}-%{version}.tar.gz
 Requires(post): sys-assert
 Requires(post): libdevice-node
-Requires(post): org.tizen.indicator
-Requires(post): org.tizen.quickpanel
 Requires(post): sqlite
 Requires(post): connman
 BuildRequires:  cmake
-BuildRequires:  libprivilege-control-conf
-BuildRequires:  pkgconfig(glib-2.0)
-BuildRequires:  pkgconfig(gobject-2.0)
 BuildRequires:  pkgconfig(dlog)
-BuildRequires:  pkgconfig(libsoup-2.4)
+BuildRequires:  pkgconfig(gobject-2.0)
 BuildRequires:  pkgconfig(xdgmime)
 BuildRequires:  pkgconfig(vconf)
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(bundle)
 BuildRequires:  pkgconfig(capi-base-common)
 BuildRequires:  pkgconfig(capi-appfw-app-manager)
+BuildRequires:  pkgconfig(capi-appfw-application)
 BuildRequires:  pkgconfig(capi-network-connection)
-BuildRequires:  pkgconfig(notification)
 BuildRequires:  pkgconfig(appsvc)
-BuildRequires:  pkgconfig(wifi-direct)
+BuildRequires:  pkgconfig(libcurl)
+BuildRequires:  pkgconfig(capi-content-mime-type)
 BuildRequires:  pkgconfig(libsmack)
 BuildRequires:  gettext-devel
 BuildRequires:  pkgconfig(libsystemd-daemon)
+BuildRequires:  pkgconfig(capi-network-wifi-direct)
+BuildRequires:  pkgconfig(system-resource)
+BuildRequires:  model-build-features 
+BuildRequires:  pkgconfig(storage)
+%if "%{?tizen_profile_name}" == "wearable"
+BuildRequires:  pkgconfig(security-server)
+%else if "%{?tizen_profile_name}" == "mobile"
+BuildRequires:  pkgconfig(notification)
+%endif
 
 %description
-Description: download the contents in background
+Description: Download the contents in background
 
 %package devel
 Summary:    download-provider
@@ -40,20 +46,40 @@ Group:      Development/Libraries
 Requires:   %{name} = %{version}-%{release}
 
 %description devel
-Description: download the contents in background (developement files)
+Description: Download the contents in background (development files)
 
 %prep
 %setup -q
 
-%define _data_install_path /usr/share/%{name}
-%define _imagedir %{_data_install_path}/images 
-%define _localedir %{_data_install_path}/locales
-%define _sqlschemadir %{_data_install_path}/sql
-%define _databasedir /opt/usr/dbspace
-%define _databasefile %{_databasedir}/.download-provider.db
-%define _sqlschemafile %{_sqlschemadir}/download-provider-schema.sql
+%define _data_install_path /opt/usr/data/%{name}
+%define _resource_install_path /usr/share/%{name}
+%define _imagedir %{_resource_install_path}/images 
+%define _localedir %{_resource_install_path}/locales
+%define _databasedir %{_data_install_path}/database
+%define _database_client_dir %{_databasedir}/clients
+%define _notifydir %{_data_install_path}/notify
+%define _ipc_socket /opt/data/%{name}/%{name}.sock
 %define _licensedir /usr/share/license
-%define _smackruledir /opt/etc/smack/accesses.d
+%define _logdump_script_dir /opt/etc/dump.d/module.d
+%define _http_lib libcurl
+
+%define download_booster OFF
+%define sys_resource OFF
+%define support_oma_drm OFF
+%define wifi_direct ON
+%define support_security_privilege OFF
+%define support_companion_mode OFF
+%define support_notification ON
+%define _manifest_name %{name}.manifest
+
+%if 0%{?model_build_feature_wlan_p2p_disable }
+%define wifi_direct OFF
+%endif
+%if "%{?tizen_profile_name}" == "wearable"
+%define download_booster OFF
+%define support_notification OFF
+%define _manifest_name %{name}-w.manifest
+%endif
 
 %define cmake \
 	CFLAGS="${CFLAGS:-%optflags} -fPIC -D_REENTRANT -fvisibility=hidden"; export CFLAGS \
@@ -67,16 +93,55 @@ Description: download the contents in background (developement files)
 		-DPKG_NAME=%{name} \\\
 		-DPKG_VERSION=%{version} \\\
 		-DPKG_RELEASE=%{release} \\\
+		-DIPC_SOCKET:PATH=%{_ipc_socket} \\\
+		-DPROVIDER_DIR:PATH=%{_data_install_path} \\\
+		-DNOTIFY_DIR:PATH=%{_notifydir} \\\
+		-DDATABASE_DIR:PATH=%{_databasedir} \\\
+		-DDATABASE_CLIENT_DIR:PATH=%{_database_client_dir} \\\
 		-DIMAGE_DIR:PATH=%{_imagedir} \\\
 		-DLOCALE_DIR:PATH=%{_localedir} \\\
-		-DDATABASE_SCHEMA_DIR=%{_sqlschemadir} \\\
-		-DDATABASE_FILE:PATH=%{_databasefile} \\\
-		-DDATABASE_SCHEMA_FILE=%{_sqlschemafile} \\\
 		-DLICENSE_DIR:PATH=%{_licensedir} \\\
-		-DSMACK_RULE_DIR:PATH=%{_smackruledir} \\\
+		%if "%{?wifi_direct}" == "ON" \
+		-DSUPPORT_WIFI_DIRECT:BOOL=ON \\\
+		%else \
 		-DSUPPORT_WIFI_DIRECT:BOOL=OFF \\\
+		%endif \
+		%if "%{?sys_resource}" == "ON" \
+		-DSUPPORT_SYS_RESOURCE:BOOL=ON \\\
+		%else \
+		-DSUPPORT_SYS_RESOURCE:BOOL=OFF \\\
+		%endif \
+		%if "%{?download_booster}" == "ON" \
+		-DSUPPORT_DOWNLOAD_BOOSTER:BOOL=ON \\\
+		%else \
+		-DSUPPORT_DOWNLOAD_BOOSTER:BOOL=OFF \\\
+		%endif \
+		%if "%{?support_notification}" == "ON" \
+		-DSUPPORT_NOTIFICATION:BOOL=ON \\\
+		%else \
+		-DSUPPORT_NOTIFICATION:BOOL=OFF \\\
+		%endif \
 		-DSUPPORT_LOG_MESSAGE:BOOL=ON \\\
-		-DSUPPORT_CHECK_IPC:BOOL=ON \\\
+		%if "%{?support_oma_drm}" == "ON" \
+		-DSUPPORT_OMA_DRM:BOOL=ON \\\
+		%else \
+		-DSUPPORT_OMA_DRM:BOOL=OFF \\\
+		%endif \
+		%if "%{?support_security_privilege}" == "ON" \
+		-DSUPPORT_SECURITY_PRIVILEGE:BOOL=ON \\\
+		%else \
+		-DSUPPORT_SECURITY_PRIVILEGE:BOOL=OFF \\\
+		%endif \
+		%if "%{?support_companion_mode}" == "ON" \
+		-DSUPPORT_COMPANION_MODE:BOOL=ON \\\
+		%else \
+		-DSUPPORT_COMPANION_MODE:BOOL=OFF \\\
+		%endif \
+		%if "%{?_ux_define}" == "tizen2.3" \
+		-DTIZEN_2_3_UX:BOOL=ON \\\
+		%endif \
+		-DCMAKE_LOG_DUMP_SCRIPT_DIR=%{_logdump_script_dir} \\\
+		-DHTTP_LIB=%{_http_lib} \\\
 		%if "%{?_lib}" == "lib64" \
 		%{?_cmake_lib_suffix64} \\\
 		%endif \
@@ -84,11 +149,9 @@ Description: download the contents in background (developement files)
 		-DBUILD_SHARED_LIBS:BOOL=ON
 
 %build
-%if 0%{?tizen_build_binary_release_type_eng}
-export CFLAGS="$CFLAGS -DTIZEN_ENGINEER_MODE"
-export CXXFLAGS="$CXXFLAGS -DTIZEN_ENGINEER_MODE"
-export FFLAGS="$FFLAGS -DTIZEN_ENGINEER_MODE"
-%endif
+export CFLAGS="$CFLAGS -DTIZEN_DEBUG_ENABLE"
+export CXXFLAGS="$CXXFLAGS -DTIZEN_DEBUG_ENABLE"
+export FFLAGS="$FFLAGS -DTIZEN_DEBUG_ENABLE"
 %cmake .
 make %{?jobs:-j%jobs}
 
@@ -96,29 +159,25 @@ make %{?jobs:-j%jobs}
 rm -rf %{buildroot}
 %make_install
 mkdir -p %{buildroot}%{_licensedir}
-mkdir -p %{buildroot}/%{_data_install_path}
 mkdir -p %{buildroot}%{_libdir}/systemd/system/graphical.target.wants
 mkdir -p %{buildroot}%{_libdir}/systemd/system/sockets.target.wants
 ln -s ../download-provider.service %{buildroot}%{_libdir}/systemd/system/graphical.target.wants/
 ln -s ../download-provider.socket %{buildroot}%{_libdir}/systemd/system/sockets.target.wants/
 
 %post
-mkdir -p %{_databasedir}
-
-if [ ! -f %{_databasefile} ];
-then
-sqlite3 %{_databasefile} '.read %{_sqlschemafile}'
-chmod 660 %{_databasefile}
-chmod 660 %{_databasefile}-journal
-fi
+#make notify dir in post section for smack
+mkdir -p %{_notifydir}
+mkdir -p --mode=0700 %{_databasedir}
+chsmack -a 'download-provider' %{_databasedir}
+mkdir -p --mode=0700 %{_database_client_dir}
+chsmack -a 'download-provider' %{_database_client_dir}
 
 %files
 %defattr(-,root,root,-)
-%manifest download-provider.manifest
+%manifest %{_manifest_name}
 %{_imagedir}/*.png
-%{_imagedir}/*.gif
-%{_localedir}/*
-%{_libdir}/libdownloadagent2.so.0.0.1
+%{_localedir}/*/*/download-provider.mo
+%{_libdir}/libdownloadagent2.so.0.1.0
 %{_libdir}/libdownloadagent2.so
 %{_libdir}/systemd/system/download-provider.service
 %{_libdir}/systemd/system/graphical.target.wants/download-provider.service
@@ -128,47 +187,15 @@ fi
 %{_libdir}/libdownload-provider-interface.so.0
 %{_bindir}/%{name}
 %{_licensedir}/%{name}
-%{_smackruledir}/%{name}.rule
-%{_sqlschemafile}
+%attr(0544,root,root) %{_logdump_script_dir}/dump-%{name}.sh
 
 %files devel
 %defattr(-,root,root,-)
-%{_libdir}/libdownloadagent2.so.0.0.1
+%{_libdir}/libdownloadagent2.so.0.1.0
 %{_libdir}/libdownloadagent2.so
 %{_libdir}/libdownload-provider-interface.so
-%{_includedir}/download-provider/download-provider-defs.h
+%{_includedir}/download-provider/download-provider.h
 %{_includedir}/download-provider/download-provider-interface.h
 %{_bindir}/%{name}
 %{_libdir}/pkgconfig/download-provider.pc
 %{_libdir}/pkgconfig/download-provider-interface.pc
-
-%changelog
-* Tue Oct 29 2013 Jungki Kwak <jungki.kwak@samsung.com> 
-- Resolve a bug about invalid url
-
-* Tue Sep 17 2013 Jungki Kwak <jungki.kwak@samsung.com> 
-- Add depenency of connman for smack label
-
-* Thu Sep 12 2013 Jungki Kwak <jungki.kwak@samsung.com>
-- Resolve a bug to check return value
-- Resolve build warnnings and add error exception
-- Register download notification when client process is exited
-
-* Wed Sep 11 2013 Jungki Kwak <jungki.kwak@samsung.com>
-- Implement auto-resume in ip-changed case
-- Remove dbus-activation feature
-- Implementation of new APIs for notification
-
-* Tue Sep 05 2013 Jungki Kwak <jungki.kwak@samsung.com>
-- Update downloading icon for ongoing notification
-- Return disk full error when file system call return in case of ENOSPC
-
-* Tue Jul 09 2013 Jungki Kwak <jungki.kwak@samsung.com>
-- Change to use vconf for downloading icon of indicator
-
-* Mon Jul 08 2013 Jungki Kwak <jungki.kwak@samsung.com>
-- Add to check smack enable state
-
-* Thu Jul 04 2013 Jungki Kwak <jungki.kwak@samsung.com>
-- Check smack integrity about install directory and downloaded file
-

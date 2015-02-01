@@ -69,8 +69,6 @@ pthread_mutex_t mutex_for_xdgmime = PTHREAD_MUTEX_INITIALIZER;
 
 da_bool_t is_ambiguous_MIME_Type(const char *in_mime_type)
 {
-	DA_LOG_FUNC_LOGV(Default);
-
 	if (!in_mime_type)
 		return DA_FALSE;
 
@@ -79,7 +77,7 @@ da_bool_t is_ambiguous_MIME_Type(const char *in_mime_type)
 	for (index = 0 ; index < list_size ; index++) {
 		if (0 == strncmp(in_mime_type, ambiguous_MIME_Type_list[index],
 				strlen(ambiguous_MIME_Type_list[index]))) {
-			DA_SECURE_LOGD("It is ambiguous! [%s]", ambiguous_MIME_Type_list[index]);
+			//DA_SECURE_LOGD("It is ambiguous! [%s]", ambiguous_MIME_Type_list[index]);
 			return DA_TRUE;
 		}
 	}
@@ -87,42 +85,41 @@ da_bool_t is_ambiguous_MIME_Type(const char *in_mime_type)
 	return DA_FALSE;
 }
 
-da_result_t da_mime_get_ext_name(char *mime, char **ext)
+da_ret_t da_mime_get_ext_name(char *mime, char **ext)
 {
-	da_result_t ret = DA_RESULT_OK;
+	da_ret_t ret = DA_RESULT_OK;
 	const char **extlist = DA_NULL;
 	const char *unaliased_mimetype = DA_NULL;
 	char ext_temp[DA_MAX_STR_LEN] = {0,};
 	char *temp = NULL;
 
-	DA_LOG_FUNC_LOGV(Default);
+	DA_LOGV("");
 
 	if (DA_NULL == mime || DA_NULL == ext) {
 		ret = DA_ERR_INVALID_ARGUMENT;
-		DA_LOG_ERR(Default,"Invalid mime type");
+		DA_LOGE("Invalid mime type");
 		goto ERR;
 	}
 //	DA_SECURE_LOGD("mime str[%s]ptr[%p]len[%d]",mime,mime,strlen(mime));
 	/* unaliased_mimetype means representative mime among similar types */
-	_da_thread_mutex_lock(&mutex_for_xdgmime);
+	DA_MUTEX_LOCK(&mutex_for_xdgmime);
 	unaliased_mimetype = xdg_mime_unalias_mime_type(mime);
-	_da_thread_mutex_unlock(&mutex_for_xdgmime);
 
 	if (unaliased_mimetype == DA_NULL) {
 		ret = DA_ERR_INVALID_MIME_TYPE;
-		DA_LOG_ERR(Default,"Invalid mime type : No unsaliased mime type");
+		DA_LOGI("Invalid mime type : No unsaliased mime type");
+		DA_MUTEX_UNLOCK(&mutex_for_xdgmime);
 		goto ERR;
 	}
 	DA_SECURE_LOGD("unaliased_mimetype[%s]\n",unaliased_mimetype);
 
 	/* Get extension name from shared-mime-info */
-	_da_thread_mutex_lock(&mutex_for_xdgmime);
 	extlist = xdg_mime_get_file_names_from_mime_type(unaliased_mimetype);
-	_da_thread_mutex_unlock(&mutex_for_xdgmime);
+	DA_MUTEX_UNLOCK(&mutex_for_xdgmime);
 	if (extlist == DA_NULL || *extlist == DA_NULL) {
 		int i = 0;
 		ret = DA_ERR_INVALID_MIME_TYPE;
-		DA_LOG(Default,"No extension list");
+		DA_LOGV("No extension list");
 #ifdef _SAMSUNG_MIME_POLICY
 		for (i = 0; i < MAX_SEC_MIME_TABLE_INDEX; i++)
 		{
@@ -134,8 +131,8 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 		}
 #endif
 	} else { /* For drm case, this else statement is needed */
-		DA_SECURE_LOGD("extlist[%s]\n",*extlist);
-		strncpy(ext_temp, *extlist, DA_MAX_STR_LEN);
+//		DA_LOGD("extlist[%s]\n",*extlist);
+		strncpy(ext_temp, *extlist, DA_MAX_STR_LEN - 1);
 		/* If only one extension name is existed, don't enter here */
 		while (*extlist != NULL) {
 			int i = 0;
@@ -151,12 +148,12 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 					break;
 				}
 			}
-			DA_LOG_VERBOSE(Default,"index[%d]\n",i);
+			DA_LOGV("index[%d]\n",i);
 			/* If there is a mime at extension transform table */
 			if (i < MAX_EXT_TABLE_INDEX) {
 				break;
 			}
-			DA_SECURE_LOGD("extlist[%s]\n",*extlist);
+//			DA_LOGD("extlist[%s]\n",*extlist);
 			extlist++;
 		}
 //		DA_SECURE_LOGD("extension from shared mime info[%s]",ext_temp);
@@ -165,18 +162,18 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 	if (strlen(ext_temp) < 1) {
 		/* If there is no mime string for OMA descriptor mime type */
 		if (strncmp(DD_MIME_STR, mime, strlen(DD_MIME_STR)) == 0) {
-			strncpy(ext_temp, DD_EXT_STR, DA_MAX_STR_LEN-1);
+			strncpy(ext_temp, DD_EXT_STR, DA_MAX_STR_LEN - 1);
 			ret = DA_RESULT_OK;
 			/* If there is no extension name for "applicaion/vnd.oma.drm.messeages"
 			 *  at shared-mime-info*/
-		} else if (strncmp(DRM_MIME_MSG_STR, mime,
-				strlen(DRM_MIME_MSG_STR)) == 0) {
-			strncpy(ext_temp, DRM_EXT_STR, DA_MAX_STR_LEN-1);
+		} else if (strncmp(DRM_MIME_MSG_STR, mime, strlen(DRM_MIME_MSG_STR)) ==
+				0) {
+			strncpy(ext_temp, DRM_EXT_STR, DA_MAX_STR_LEN - 1);
 			/* If there is extension name at extlist, the return value can have an error.*/
 			ret = DA_RESULT_OK;
 		} else {
 			ret = DA_ERR_INVALID_MIME_TYPE;
-			DA_LOG_ERR(Default,"Invalid mime type : no extension name at list");
+			DA_LOGI("Invalid mime type : no extension name at list");
 		}
 	}
 	if (ret != DA_RESULT_OK)
@@ -188,6 +185,7 @@ da_result_t da_mime_get_ext_name(char *mime, char **ext)
 	else
 		temp++;
 
+	DA_SECURE_LOGD("final extension name:[%s]",temp);
 	*ext = (char*)calloc(1, strlen(temp) + 1);
 	if (*ext != DA_NULL) {
 		strncpy(*ext, temp,strlen(temp));
@@ -206,11 +204,11 @@ da_bool_t da_get_extension_name_from_url(char *url, char **ext)
 	char *temp_str = DA_NULL;
 	int buf_len = 0;
 
-	DA_LOG_FUNC_LOGV(Default);
+	DA_LOGV("");
 
 	if (DA_NULL == url || DA_NULL == ext) {
 		ret = DA_FALSE;
-		DA_LOG_ERR(Default,"Invalid Argument");
+		DA_LOGE("Invalid Argument");
 		return ret;
 	}
 
@@ -229,7 +227,7 @@ da_bool_t da_get_extension_name_from_url(char *url, char **ext)
 
 			if (DA_NULL == *ext) {
 				ret = DA_FALSE;
-				DA_LOG_ERR(Default,"Memory Fail");
+				DA_LOGE("Memory Fail");
 				goto ERR;
 			}
 			strncpy(*ext,buff,buf_len);
@@ -258,24 +256,24 @@ da_bool_t da_get_file_name_from_url(char *url, char **name)
 	int len_name = 0;
 	char name_buff[DA_MAX_FILE_PATH_LEN] = {0,};
 
-	DA_LOG_FUNC_LOGV(Default);
+	DA_LOGV("");
 
 	if (DA_NULL == url || DA_NULL == name) {
 		ret = DA_FALSE;
-		DA_LOG_ERR(Default,"Invalid Argument");
+		DA_LOGE("Invalid Argument");
 		goto ERR;
 	}
-	*name = DA_NULL;
+
 	if (!strstr(url, "http") && !strstr(url, "https")) {
 		ret = DA_FALSE;
-		DA_LOG_ERR(Default,"Invalid Argument");
+		DA_LOGE("Invalid Argument");
 		goto ERR;
     }
 
 	buff = (char*) calloc(1, strlen(url) +1);
 	if(DA_NULL == buff) {
 		ret = DA_FALSE;
-		DA_LOG_ERR(Default,"Memory Fail");
+		DA_LOGE("Memory Fail");
 		goto ERR;
     }
 
@@ -339,7 +337,6 @@ da_bool_t da_get_file_name_from_url(char *url, char **name)
 		}
 //		DA_SECURE_LOGD("file name BEFORE removing prohibited character = %s", name_buff);
 		delete_prohibited_char(name_buff, strlen(name_buff));
-//		DA_SECURE_LOGD("file name AFTER removing prohibited character = %s", name_buff);
 		len_name = strlen(name_buff);
 		*name = (char*) calloc(1, len_name + 1);
 		if (*name) {
@@ -363,7 +360,7 @@ void delete_prohibited_char(char *szTarget, int str_len)
 	int tar_len = 0;
 
 	if(szTarget == NULL || str_len <= 0 || strlen(szTarget) != str_len) {
-		DA_LOG_ERR(Default,"Invaild Parameter\n");
+		DA_LOGE("Invaild Parameter\n");
 		return;
 	}
 
@@ -397,5 +394,56 @@ void delete_prohibited_char(char *szTarget, int str_len)
 		free(chk_str);
 	}
 	return;
+}
+
+#ifdef _ENABLE_OMA_DRM
+da_bool_t is_content_drm_dcf(char *content_type)
+{
+	if (content_type == DA_NULL)
+		return DA_FALSE;
+
+	if (0 == strcmp(content_type, DRM_MIME_CONTENT_STR)) {
+		DA_LOGV("DRM_DM content");
+		return DA_TRUE;
+	} else {
+		return DA_FALSE;
+	}
+}
+
+da_bool_t is_content_drm_dm(char *content_type)
+{
+	if (content_type == DA_NULL)
+		return DA_FALSE;
+
+	if (0 == strcmp(content_type, DRM_MIME_MSG_STR)) {
+		DA_LOGV("DRM_DM content");
+		return DA_TRUE;
+	} else {
+		return DA_FALSE;
+	}
+}
+#endif
+
+da_ret_t get_extension_from_mime_type(char *mime_type, char **extension)
+{
+	da_ret_t ret = DA_RESULT_OK;
+	char *ext = DA_NULL;
+
+	DA_LOGV("");
+	if (DA_NULL == mime_type || DA_NULL == extension) {
+		DA_LOGE("received mime_type is null");
+		ret = DA_ERR_INVALID_ARGUMENT;
+		goto ERR;
+	}
+//	DA_SECURE_LOGD("input mime type = %s", mime_type);
+	if (DA_RESULT_OK != (ret = da_mime_get_ext_name(mime_type, &ext))) {
+		DA_LOGE("can't find proper extension!");
+		goto ERR;
+	}
+	*extension = ext;
+//	DA_SECURE_LOGD("found extension = %s", *extension);
+
+ERR:
+	return ret;
 }
 

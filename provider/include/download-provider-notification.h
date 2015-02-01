@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Samsung Electronics Co., Ltd All Rights Reserved
+ * Copyright (c) 2013 Samsung Electronics Co., Ltd All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the License);
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,20 @@
  * limitations under the License.
  */
 
-#ifndef DOWNLOAD_PROVIDER2_NOTIFICATION_H
-#define DOWNLOAD_PROVIDER2_NOTIFICATION_H
+#ifndef DOWNLOAD_PROVIDER_NOTIFICATION_H
+#define DOWNLOAD_PROVIDER_NOTIFICATION_H
 
-#include "download-provider-config.h"
-
-int dp_set_downloadinginfo_notification(int id, char *packagename);
-int dp_set_downloadedinfo_notification(int priv_id, int id, char *packagename, dp_state_type state);
-void dp_update_downloadinginfo_notification(int priv_id, double received_size, double file_size);
-void dp_clear_downloadinginfo_notification(void);
+#ifdef SUPPORT_NOTIFICATION
+void dp_notification_set_locale(void);
+void dp_notification_clear_locale(void);
+void dp_notification_clear_ongoings(void);
+int dp_notification_delete_ongoing(const int noti_priv_id);
+int dp_notification_delete(const int noti_priv_id);
+int dp_notification_ongoing_new(const char *pkgname, const char *subject, unsigned char *raws_buffer, const int raws_length);
+int dp_notification_ongoing_update(const int noti_priv_id, const double received_size, const double file_size, const char *subject);
+int dp_notification_new(void *dbhandle, const int download_id, const int state, int content_type, const char *pkgname);
+#else
+void dp_notification_clear_ongoings(void);
+#endif
 
 #endif

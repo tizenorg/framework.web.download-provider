@@ -14,301 +14,173 @@
  * limitations under the License.
  */
 
-#include "download-agent-client-mgr.h"
-#include "download-agent-debug.h"
+#include <stdlib.h>
+#include <sys/syscall.h>
+#include <signal.h>
+
+#ifdef _ENABLE_SYS_RESOURCE
+#include "resourced.h"
+#endif
+
 #include "download-agent-dl-mgr.h"
-#include "download-agent-utils.h"
+#include "download-agent-dl-info.h"
 #include "download-agent-http-mgr.h"
-#include "download-agent-file.h"
-#include "download-agent-plugin-conf.h"
 
-
-static da_result_t __cancel_download_with_slot_id(int slot_id);
-static da_result_t __suspend_download_with_slot_id(int slot_id);
-
-
-da_result_t requesting_download(stage_info *stage)
+void __thread_clean_up_handler_for_start_download(void *arg)
 {
-	da_result_t ret = DA_RESULT_OK;
-	req_dl_info *request_session = DA_NULL;
+	DA_LOGI("cleanup for thread id[%lu]", pthread_self());
+}
 
-	DA_LOG_FUNC_LOGV(Default);
+da_ret_t __download_content(da_info_t *da_info)
+{
+	da_ret_t ret = DA_RESULT_OK;
 
-	if (!stage) {
-		DA_LOG_ERR(Default, "stage is null..");
+	DA_LOGV("");
+	if (!da_info) {
+		DA_LOGE("NULL CHECK!: da_info");
 		ret = DA_ERR_INVALID_ARGUMENT;
-		goto ERR;
-	}
-
-	ret = make_req_dl_info_http(stage, GET_STAGE_TRANSACTION_INFO(stage));
-	if (ret != DA_RESULT_OK)
-		goto ERR;
-
-	request_session = GET_STAGE_TRANSACTION_INFO(stage);
-	ret = request_http_download(stage);
-	if (DA_RESULT_OK == ret) {
-		DA_LOG_VERBOSE(Default, "Http download is complete.");
-	} else {
-		DA_LOG_ERR(Default, "Http download is failed. ret = %d", ret);
-		goto ERR;
-	}
-ERR:
-	return ret;
-}
-
-da_result_t handle_after_download(stage_info *stage)
-{
-	da_result_t ret = DA_RESULT_OK;
-	da_mime_type_id_t mime_type = DA_MIME_TYPE_NONE;
-
-	DA_LOG_FUNC_LOGV(Default);
-
-	mime_type = get_mime_type_id(
-	                GET_CONTENT_STORE_CONTENT_TYPE(GET_STAGE_CONTENT_STORE_INFO(stage)));
-
-	switch (mime_type) {
-		case DA_MIME_TYPE_NONE:
-			DA_LOG(Default, "DA_MIME_TYPE_NONE");
-			ret = DA_ERR_MISMATCH_CONTENT_TYPE;
-			break;
-		default:
-			CHANGE_DOWNLOAD_STATE(DOWNLOAD_STATE_FINISH, stage);
-			break;
-	} /* end of switch */
-
-	return ret;
-}
-
-static da_result_t __cancel_download_with_slot_id(int slot_id)
-{
-	da_result_t ret = DA_RESULT_OK;
-	download_state_t download_state;
-	stage_info *stage = DA_NULL;
-
-	DA_LOG_FUNC_LOGD(Default);
-
-	_da_thread_mutex_lock (&mutex_download_state[slot_id]);
-	download_state = GET_DL_STATE_ON_ID(slot_id);
-	DA_LOG(Default, "download_state = %d", GET_DL_STATE_ON_ID(slot_id));
-
-	if (download_state == DOWNLOAD_STATE_FINISH ||
-			download_state == DOWNLOAD_STATE_CANCELED) {
-		DA_LOG_CRITICAL(Default, "Already download is finished. Do not send cancel request");
-		_da_thread_mutex_unlock (&mutex_download_state[slot_id]);
 		return ret;
 	}
-	_da_thread_mutex_unlock (&mutex_download_state[slot_id]);
 
-	stage = GET_DL_CURRENT_STAGE(slot_id);
-	if (!stage)
-		return DA_RESULT_OK;
-
-	ret = request_to_cancel_http_download(stage);
-	if (ret != DA_RESULT_OK)
-		goto ERR;
-	DA_LOG(Default, "Download cancel Successful for download id - %d", slot_id);
-ERR:
+	ret = request_http_download(da_info);
 	return ret;
 }
 
-da_result_t cancel_download(int dl_id)
+
+static void *__thread_start_download(void *data)
 {
-	da_result_t ret = DA_RESULT_OK;
+	da_info_t *da_info = DA_NULL;
+	req_info_t *req_info = DA_NULL;
+	int da_id = DA_INVALID_ID;
 
-	int slot_id = DA_INVALID_ID;
+//	DA_LOGV("");
 
-	DA_LOG_FUNC_LOGD(Default);
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, DA_NULL);
 
-	ret = get_slot_id_for_dl_id(dl_id, &slot_id);
-	if (ret != DA_RESULT_OK) {
-		DA_LOG_ERR(Default, "dl req ID is not Valid");
-		goto ERR;
+	da_info = (da_info_t *)data;
+	NULL_CHECK_RET_OPT(da_info, DA_NULL);
+	req_info = da_info->req_info;
+	NULL_CHECK_RET_OPT(req_info, DA_NULL);
+
+	da_id = da_info->da_id;
+	pthread_cleanup_push(__thread_clean_up_handler_for_start_download, DA_NULL);
+#ifdef _ENABLE_SYS_RESOURCE
+	if (req_info->pkg_name) {
+		pid_t tid = (pid_t) syscall(SYS_gettid);
+		da_info->tid = (pid_t) syscall(SYS_gettid);
+		DA_SECURE_LOGI("pkg_name[%s] threadid[%lu]",
+				req_info->pkg_name,pthread_self());
+		if (join_app_performance(req_info->pkg_name, tid) !=
+				RESOURCED_ERROR_OK) {
+			DA_LOGE("Can not put app to network performance id[%d]", da_id);
+		}
 	}
-
-	if (DA_FALSE == is_valid_slot_id(slot_id)) {
-		DA_LOG_ERR(Default, "Download ID is not Valid");
-		ret = DA_ERR_INVALID_ARGUMENT;
-		goto ERR;
-	}
-
-	ret = __cancel_download_with_slot_id(slot_id);
-
-ERR:
-	return ret;
-
-}
-
-static da_result_t __suspend_download_with_slot_id(int slot_id)
-{
-	da_result_t ret = DA_RESULT_OK;
-	download_state_t download_state;
-	stage_info *stage = DA_NULL;
-
-	DA_LOG_FUNC_LOGD(Default);
-
-	_da_thread_mutex_lock (&mutex_download_state[slot_id]);
-	download_state = GET_DL_STATE_ON_ID(slot_id);
-	DA_LOG(Default, "download_state = %d", GET_DL_STATE_ON_ID(slot_id));
-	_da_thread_mutex_unlock (&mutex_download_state[slot_id]);
-
-	stage = GET_DL_CURRENT_STAGE(slot_id);
-	if (!stage)
-		return DA_ERR_CANNOT_SUSPEND;
-
-	ret = request_to_suspend_http_download(stage);
-	if (ret != DA_RESULT_OK)
-		goto ERR;
-	DA_LOG(Default, "Download Suspend Successful for download id-%d", slot_id);
-ERR:
-	return ret;
-}
-
-da_result_t suspend_download(int dl_id, da_bool_t is_enable_cb)
-{
-	da_result_t ret = DA_RESULT_OK;
-	int slot_id = DA_INVALID_ID;
-
-	DA_LOG_FUNC_LOGD(Default);
-
-	ret = get_slot_id_for_dl_id(dl_id, &slot_id);
-	if (ret != DA_RESULT_OK) {
-		DA_LOG_ERR(Default, "dl req ID is not Valid");
-		goto ERR;
-	}
-	GET_DL_ENABLE_PAUSE_UPDATE(slot_id) = is_enable_cb;
-	if (DA_FALSE == is_valid_slot_id(slot_id)) {
-		DA_LOG_ERR(Default, "Download ID is not Valid");
-		ret = DA_ERR_INVALID_ARGUMENT;
-		goto ERR;
-	}
-
-	ret = __suspend_download_with_slot_id(slot_id);
-
-ERR:
-	return ret;
-
-}
-
-static da_result_t __resume_download_with_slot_id(int slot_id)
-{
-	da_result_t ret = DA_RESULT_OK;
-	download_state_t download_state;
-	stage_info *stage = DA_NULL;
-
-	DA_LOG_FUNC_LOGD(Default);
-
-	_da_thread_mutex_lock (&mutex_download_state[slot_id]);
-	download_state = GET_DL_STATE_ON_ID(slot_id);
-	DA_LOG(Default, "download_state = %d", GET_DL_STATE_ON_ID(slot_id));
-	_da_thread_mutex_unlock (&mutex_download_state[slot_id]);
-
-	stage = GET_DL_CURRENT_STAGE(slot_id);
-
-	ret = request_to_resume_http_download(stage);
-	if (ret != DA_RESULT_OK)
-		goto ERR;
-	DA_LOG(Default, "Download Resume Successful for download id-%d", slot_id);
-ERR:
-	return ret;
-}
-
-da_result_t resume_download(int dl_id)
-{
-	da_result_t ret = DA_RESULT_OK;
-	int slot_id = DA_INVALID_ID;
-
-	DA_LOG_FUNC_LOGD(Default);
-
-	ret = get_slot_id_for_dl_id(dl_id, &slot_id);
-	if (ret != DA_RESULT_OK)
-		goto ERR;
-
-	if (DA_FALSE == is_valid_slot_id(slot_id)) {
-		DA_LOG_ERR(Default, "Download ID is not Valid");
-		ret = DA_ERR_INVALID_DL_REQ_ID;
-		goto ERR;
-	}
-
-	ret = __resume_download_with_slot_id(slot_id);
-
-ERR:
-	return ret;
-}
-
-da_result_t send_user_noti_and_finish_download_flow(
-		int slot_id, char *installed_path, char *etag)
-{
-	da_result_t ret = DA_RESULT_OK;
-	download_state_t download_state = HTTP_STATE_READY_TO_DOWNLOAD;
-	da_bool_t need_destroy_download_info = DA_FALSE;
-
-	DA_LOG_FUNC_LOGV(Default);
-
-	_da_thread_mutex_lock (&mutex_download_state[slot_id]);
-	download_state = GET_DL_STATE_ON_ID(slot_id);
-	DA_LOG_DEBUG(Default, "state = %d", download_state);
-	_da_thread_mutex_unlock (&mutex_download_state[slot_id]);
-
-	switch (download_state) {
-	case DOWNLOAD_STATE_FINISH:
-		send_client_finished_info(slot_id, GET_DL_ID(slot_id),
-		        installed_path, DA_NULL, DA_RESULT_OK,
-		        get_http_status(slot_id));
-		need_destroy_download_info = DA_TRUE;
-		break;
-	case DOWNLOAD_STATE_CANCELED:
-		send_client_finished_info(slot_id, GET_DL_ID(slot_id),
-				installed_path, etag, DA_RESULT_USER_CANCELED,
-				get_http_status(slot_id));
-		need_destroy_download_info = DA_TRUE;
-		break;
-#ifdef PAUSE_EXIT
-	case DOWNLOAD_STATE_PAUSED:
-		need_destroy_download_info = DA_TRUE;
-		break;
 #endif
-	default:
-		DA_LOG(Default, "download state = %d", download_state);
-		break;
+	__download_content(da_info);
+	destroy_da_info(da_id);
+	pthread_cleanup_pop(0);
+	DA_LOGI("=====EXIT thread : da_id[%d]=====", da_id);
+	pthread_exit((void *)DA_NULL);
+	return DA_NULL;
+}
+
+da_ret_t start_download(da_info_t *da_info)
+{
+	da_ret_t ret = DA_RESULT_OK;
+	pthread_attr_t thread_attr;
+	pthread_t tid;
+	if (pthread_attr_init(&thread_attr) != 0) {
+		ret = DA_ERR_FAIL_TO_CREATE_THREAD;
+		goto ERR;
 	}
 
-	if (need_destroy_download_info == DA_TRUE) {
-		destroy_download_info(slot_id);
+	if (pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED) != 0) {
+		ret = DA_ERR_FAIL_TO_CREATE_THREAD;
+		goto ERR;
+	}
+
+	if (pthread_create(&(tid), &thread_attr,
+			__thread_start_download, da_info) < 0) {
+		DA_LOGE("Fail to make thread:id[%d]", da_info->da_id);
+		ret = DA_ERR_FAIL_TO_CREATE_THREAD;
 	} else {
-		DA_LOG_CRITICAL(Default, "download info is not destroyed");
+		if (tid < 1) {
+			DA_LOGE("The thread start is failed before calling this");
+// When http resource is leaked, the thread ID is initialized at error handling section of thread_start_download()
+// Because the thread ID is initialized, the ptrhead_detach should not be called. This is something like timing issue between threads.
+// thread info and basic_dl_input is freed at thread_start_download(). And it should not returns error code in this case.
+			ret = DA_ERR_FAIL_TO_CREATE_THREAD;
+			goto ERR;
+		}
 	}
-
+	da_info->thread_id = tid;
+	DA_LOGI("Thread create:thread id[%lu]", da_info->thread_id);
+ERR:
+	if (DA_RESULT_OK != ret) {
+		destroy_da_info(da_info->da_id);
+	}
 	return ret;
 }
 
-da_bool_t is_valid_download_id(int dl_id)
+da_ret_t cancel_download(int dl_id, da_bool_t is_enable_cb)
 {
+	da_ret_t ret = DA_RESULT_OK;
+	da_info_t *da_info = DA_NULL;
 
-	da_bool_t ret = DA_TRUE;
-	int slot_id = DA_INVALID_ID;
+	DA_LOGV("");
 
-	DA_LOG_VERBOSE(Default, "[is_valid_download_id]download_id : %d", dl_id);
-
-	ret = get_slot_id_for_dl_id(dl_id, &slot_id);
-	if (ret != DA_RESULT_OK) {
-		DA_LOG_ERR(Default, "dl req ID is not Valid");
-		ret = DA_FALSE;
-		goto ERR;
-	} else {
-		ret = DA_TRUE;
+	ret = get_da_info_with_da_id(dl_id, &da_info);
+	if (ret != DA_RESULT_OK || !da_info) {
+		return DA_ERR_INVALID_ARGUMENT;
 	}
-
-	if (DA_FALSE == is_valid_slot_id(slot_id)) {
-		DA_LOG_ERR(Default, "Download ID is not Valid");
-		ret = DA_FALSE;
+	da_info->is_cb_update = is_enable_cb;
+	ret = request_to_cancel_http_download(da_info);
+	if (ret != DA_RESULT_OK)
 		goto ERR;
-	}
-	if (GET_DL_THREAD_ID(slot_id) < 1) {
-		DA_LOG_ERR(Default, "Download thread is not alive");
-		ret = DA_FALSE;
-		goto ERR;
-	}
+	DA_LOGI("Download cancel Successful for download id[%d]", da_info->da_id);
 
 ERR:
 	return ret;
 }
+
+da_ret_t suspend_download(int dl_id, da_bool_t is_enable_cb)
+{
+	da_ret_t ret = DA_RESULT_OK;
+	da_info_t *da_info = DA_NULL;
+
+	DA_LOGV("");
+
+	ret = get_da_info_with_da_id(dl_id, &da_info);
+	if (ret != DA_RESULT_OK || !da_info) {
+		return DA_ERR_INVALID_ARGUMENT;
+	}
+	da_info->is_cb_update = is_enable_cb;
+	ret = request_to_suspend_http_download(da_info);
+	if (ret != DA_RESULT_OK)
+		goto ERR;
+	DA_LOGV("Download Suspend Successful for download id[%d]", da_info->da_id);
+ERR:
+	return ret;
+
+}
+
+da_ret_t resume_download(int dl_id)
+{
+	da_ret_t ret = DA_RESULT_OK;
+	da_info_t *da_info = DA_NULL;
+
+	DA_LOGV("");
+
+	ret = get_da_info_with_da_id(dl_id, &da_info);
+	if (ret != DA_RESULT_OK || !da_info) {
+		return DA_ERR_INVALID_ARGUMENT;
+	}
+	da_info->is_cb_update = DA_TRUE;
+	ret = request_to_resume_http_download(da_info);
+	if (ret != DA_RESULT_OK)
+		goto ERR;
+	DA_LOGV("Download Resume Successful for download id[%d]", da_info->da_id);
+ERR:
+	return ret;
+}
+

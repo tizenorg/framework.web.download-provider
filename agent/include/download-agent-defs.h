@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef _Download_Agent_Defs_H
-#define _Download_Agent_Defs_H
+#ifndef _DOWNLOAD_AGENT_DEFS_H
+#define _DOWNLOAD_AGENT_DEFS_H
 
 #ifndef DEPRECATED
 #define DEPRECATED __attribute__((deprecated))
@@ -26,6 +26,7 @@
  * Main reason for this restriction is because of Network bandwidth.
  */
 #define DA_MAX_DOWNLOAD_REQ_AT_ONCE	50
+#define DA_MAX_TIME_OUT					65
 
 #define DA_RESULT_OK	0
 
@@ -57,33 +58,28 @@
 // System error (-200 ~ -299)
 #define DA_ERR_FAIL_TO_MEMALLOC		-200
 #define DA_ERR_FAIL_TO_CREATE_THREAD		-210
-#define DA_ERR_FAIL_TO_OBTAIN_MUTEX		-220
 #define DA_ERR_FAIL_TO_ACCESS_FILE	-230
 #define DA_ERR_DISK_FULL  	-240
-
-// Platform error (-300 ~ -399)
-#define DA_ERR_FAIL_TO_GET_CONF_VALUE		-300
-#define DA_ERR_FAIL_TO_ACCESS_STORAGE	-310
-#define DA_ERR_DLOPEN_FAIL 		-330
 
 // Network error (-400 ~ -499)
 #define DA_ERR_NETWORK_FAIL				-400
 #define DA_ERR_UNREACHABLE_SERVER		-410
-#define DA_ERR_HTTP_TIMEOUT         	-420
-#define DA_ERR_SSL_FAIL					-430
-#define DA_ERR_TOO_MANY_REDIECTS		-440
+#define DA_ERR_CONNECTION_FAIL			-420
+#define DA_ERR_HTTP_TIMEOUT         	-430
+#define DA_ERR_SSL_FAIL					-440
+#define DA_ERR_TOO_MANY_REDIRECTS		-450
+#define DA_ERR_NETWORK_UNAUTHORIZED	-460
 
 // HTTP error - not conforming with HTTP spec (-500 ~ -599)
 #define DA_ERR_MISMATCH_CONTENT_TYPE	-500
-#define DA_ERR_MISMATCH_CONTENT_SIZE	-501
-#define DA_ERR_SERVER_RESPOND_BUT_SEND_NO_CONTENT	-502
+#define DA_ERR_SERVER_RESPOND_BUT_SEND_NO_CONTENT	-501
+#define DA_ERR_MISMATCH_CONTENT_SIZE	-502
 
-// DRM error - not conforming with DRM spec (-700 ~ -799)
-#define DA_ERR_DRM_FAIL			-700
-#define DA_ERR_DRM_FILE_FAIL	-710
+// DRM error - not conforming with DRM spec (-600 ~ -699)
+#define DA_ERR_DRM_FAIL			-600
 
-// install error (-800 ~ -899)
-#define DA_ERR_FAIL_TO_INSTALL_FILE	-800
+// string to check invalid characters in path before using open() and fopen() API's
+#define DA_INVALID_PATH_STRING ";\\\":*?<>|()"
 
 #endif
 

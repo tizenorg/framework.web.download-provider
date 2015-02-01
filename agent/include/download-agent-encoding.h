@@ -20,7 +20,7 @@
 #include "download-agent-type.h"
 
 da_bool_t is_base64_encoded_word(const char *in_str);
-da_result_t decode_base64_encoded_str(const char *in_encoded_str,
+da_ret_t decode_base64_encoded_str(const char *in_encoded_str,
 	char **out_decoded_ascii_str);
 void decode_url_encoded_str(const char *in_encoded_str, char **out_str);
 

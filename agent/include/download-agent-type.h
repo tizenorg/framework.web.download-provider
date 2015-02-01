@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef _Download_Agent_Types_H
-#define _Download_Agent_Types_H
+#ifndef _DOWNLOAD_AGENT_TYPE_H
+#define _DOWNLOAD_AGENT_TYPE_H
 
 #include "download-agent-defs.h"
 
-typedef int	da_result_t;
+typedef int	da_ret_t;
 typedef int	da_bool_t;
+typedef unsigned long long da_size_t;
 
 #define IS_NOT_VALID_ID(x)  (x <= DA_INVALID_ID)
 
@@ -30,6 +31,43 @@ typedef int	da_bool_t;
 #define DA_MAX_STR_LEN			256
 #define DA_MAX_MIME_STR_LEN     	256
 #define DA_MAX_PROXY_ADDR_LEN	64		// e.g. 100.200.300.400:10000
+
+#define SCHEME_HTTP		"http://"
+
+#define DA_DEFAULT_INSTALL_PATH_FOR_PHONE "/opt/usr/media/Downloads"
+
+#define DA_MAX_ID	DA_MAX_DOWNLOAD_REQ_AT_ONCE
+
+#define SAVE_FILE_BUFFERING_SIZE_50KB (50*1024)
+
+#define NULL_CHECK(DATA) {\
+	if (!DATA) {\
+		DA_LOGE("NULL CHECK!:%s",(#DATA));\
+		return;\
+	}\
+}
+
+#define NULL_CHECK_RET(DATA) {\
+	if (!DATA) {\
+		DA_LOGE("NULL CHECK!:%s",(#DATA));\
+		return DA_ERR_INVALID_ARGUMENT;\
+	}\
+}
+
+#define NULL_CHECK_GOTO(DATA) {\
+	if (!DATA) {\
+		DA_LOGE("NULL CHECK!:%s",(#DATA));\
+		ret = DA_ERR_INVALID_ARGUMENT;\
+		goto ERR;\
+	}\
+}
+
+#define NULL_CHECK_RET_OPT(DATA, RET_DATA) {\
+	if (!DATA) {\
+		DA_LOGE("NULL CHECK!:%s",(#DATA));\
+		return RET_DATA;\
+	}\
+}
 
 #endif
 

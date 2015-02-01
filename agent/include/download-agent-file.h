@@ -14,39 +14,32 @@
  * limitations under the License.
  */
 
-#ifndef _Download_Agent_File_H
-#define _Download_Agent_File_H
+#ifndef _DOWNLOAD_AGENT_FILE_H
+#define _DOWNLOAD_AGENT_FILE_H
 
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
 #include "download-agent-type.h"
-#include "download-agent-dl-mgr.h"
+#include "download-agent-dl-info.h"
 
-#define DA_DEFAULT_INSTALL_PATH_FOR_PHONE "/opt/usr/media/Downloads"
+#define DA_FILE_BUF_SIZE (1024*32) //bytes
 
+da_ret_t check_drm_convert(file_info_t *file_info);
 da_bool_t is_file_exist(const char *file_path);
-da_bool_t is_dir_exist(const char *dir_path);
-
-void get_file_size(char *file_path, unsigned long long *out_file_size);
-
-da_result_t clean_files_from_dir(char *dir_path);
-da_result_t file_write_ongoing(stage_info *stage, char *body, int body_len);
-da_result_t file_write_complete(stage_info *stage);
-da_result_t start_file_writing(stage_info *stage);
-da_result_t start_file_writing_append(stage_info *stage);
-da_result_t start_file_writing_append_with_new_download(stage_info *stage);
-
-da_result_t  get_mime_type(stage_info *stage, char **out_mime_type);
-da_result_t  discard_download(stage_info *stage) ;
-void clean_paused_file(stage_info *stage);
-da_result_t  replace_content_file_in_stage(stage_info *stage, const char *dest_dd_file_path);
-da_result_t  decide_tmp_file_path(stage_info *stage);
-char *get_full_path_avoided_duplication(char *in_dir, char *in_candidate_file_name, char *in_extension);
-
-da_result_t copy_file(const char *src, const char *dest);
-da_result_t create_dir(const char *install_dir);
-da_result_t get_default_install_dir(char **out_path);
-
+void get_file_size(char *file_path, da_size_t *out_file_size);
+da_ret_t file_write_ongoing(file_info_t *file_info, char *body, int body_len);
+da_ret_t file_write_complete(file_info_t *file_info);
+#ifdef _RAF_SUPPORT
+da_ret_t file_write_complete_for_raf(file_info_t *file_info);
+#endif
+da_ret_t start_file_writing(da_info_t *da_info);
+da_ret_t start_file_append(file_info_t *file_info);
+da_ret_t  discard_download(file_info_t *file_info) ;
+void clean_paused_file(file_info_t *file_info);
+char *get_full_path_avoided_duplication(char *in_dir,
+		char *in_candidate_file_name, char *in_extension);
+void remove_file(const char *file_path);
+da_ret_t get_available_memory(char *dir_path, da_size_t len);
 #endif
