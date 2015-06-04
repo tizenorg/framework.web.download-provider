@@ -23,6 +23,10 @@
 #include "notification.h"
 #include "appsvc.h"
 
+#include "notification_text_domain.h"
+#include "notification_internal.h"
+#include "notification_error.h"
+
 #include "download-provider-defs.h"
 
 #include "download-provider-notification.h"
