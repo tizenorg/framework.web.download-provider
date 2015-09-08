@@ -1,8 +1,0 @@
-download-provider2 (0.0.1) unstable; urgency=low
-
-  * Git: 165.213.180.234:/slp/pkgs/d/download-provider2
-  * Tag: download-provider2_0.0.1
-
-  * initial making.
-
- -- Kwangmin Bang <justine.bang@samsung.com>  Thu, 15 Sep 2011 17:21:13 +0900

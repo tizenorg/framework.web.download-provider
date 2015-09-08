@@ -1,0 +1,10 @@
+[Socket]
+ListenStream=/opt/data/download-provider/download-provider.sock
+SocketMode=0777
+PassCredentials=yes
+Accept=false
+SmackLabelIPIn=download-provider::ipc
+SmackLabelIPOut=download-provider::ipc
+
+[Install]
+WantedBy=sockets.target
