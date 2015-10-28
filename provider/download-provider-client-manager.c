@@ -325,7 +325,7 @@ static int __dp_client_run(int clientfd, dp_client_slots_fmt *slot,
 	// make notify fifo
 	slot->client.notify = dp_notify_init(credential.pid);
 	if (slot->client.notify < 0) {
-		TRACE_STRERROR("failed to open fifo slot:%d", clientfd);
+		TRACE_ERROR("failed to open fifo slot:%d", clientfd);
 		errorcode = DP_ERROR_IO_ERROR;
 	} else {
 		char *smack_label = NULL;
@@ -380,9 +380,9 @@ static int __dp_client_new(int clientfd, dp_client_slots_fmt *clients,
 	char *pkgname = NULL;
 
 	// getting the package name via pid
-	if (app_manager_get_package(credential.pid, &pkgname) !=
+	if (app_manager_get_app_id(credential.pid, &pkgname) !=
 			APP_MANAGER_ERROR_NONE)
-		TRACE_ERROR("[CRITICAL] app_manager_get_package");
+		TRACE_ERROR("[CRITICAL] app_manager_get_app_id");
 
 	//// TEST CODE ... to allow sample client ( no package name ).
 	if (pkgname == NULL) {
@@ -397,7 +397,7 @@ static int __dp_client_new(int clientfd, dp_client_slots_fmt *clients,
 	}
 
 	if (pkgname == NULL) {
-		TRACE_ERROR("[CRITICAL] app_manager_get_package");
+		TRACE_ERROR("[CRITICAL] app_manager_get_app_id");
 		return DP_ERROR_INVALID_PARAMETER;
 	}
 	if ((pkg_len = strlen(pkgname)) <= 0) {
@@ -501,7 +501,7 @@ void *dp_client_manager(void *arg)
 
 	g_dp_sock = __dp_accept_socket_new();
 	if (g_dp_sock < 0) {
-		TRACE_STRERROR("failed to open listen socket");
+		TRACE_ERROR("failed to open listen socket");
 		g_main_loop_quit(event_loop);
 		return 0;
 	}
@@ -530,7 +530,7 @@ void *dp_client_manager(void *arg)
 #endif
 
 	if (__dp_db_open_client_manager() < 0) {
-		TRACE_STRERROR("failed to open database for client-manager");
+		TRACE_ERROR("failed to open database for client-manager");
 		g_main_loop_quit(event_loop);
 		return 0;
 	}
@@ -569,7 +569,7 @@ void *dp_client_manager(void *arg)
 		eset = except_fdset;
 
 		if (select((maxfd + 1), &rset, 0, &eset, &timeout) < 0) {
-			TRACE_STRERROR("interrupted by terminating");
+			TRACE_ERROR("interrupted by terminating");
 			break;
 		}
 
@@ -579,7 +579,7 @@ void *dp_client_manager(void *arg)
 		}
 
 		if (FD_ISSET(g_dp_sock, &eset) > 0) {
-			TRACE_STRERROR("exception of socket");
+			TRACE_ERROR("exception of socket");
 			break;
 		} else if (FD_ISSET(g_dp_sock, &rset) > 0) {
 
@@ -588,7 +588,7 @@ void *dp_client_manager(void *arg)
 			clientfd = accept(g_dp_sock, (struct sockaddr *)&clientaddr,
 					&clientlen);
 			if (clientfd < 0) {
-				TRACE_STRERROR("too many client ? accept failure");
+				TRACE_ERROR("too many client ? accept failure");
 				// provider need the time of refresh.
 				break;
 			}

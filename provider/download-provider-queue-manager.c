@@ -278,7 +278,7 @@ static int __dp_queue_manager_start()
 		TRACE_DEBUG("try to create queue-manager");
 		if (pthread_create(&g_dp_queue_manager_tid, NULL,
 				__dp_queue_manager, NULL) != 0) {
-			TRACE_STRERROR("failed to create queue-manager");
+			TRACE_ERROR("failed to create queue-manager");
 			return -1;
 		}
 	}
@@ -304,12 +304,14 @@ void dp_queue_manager_kill()
 	if (g_dp_queue_manager_tid > 0 &&
 			pthread_kill(g_dp_queue_manager_tid, 0) != ESRCH) {
 		//send signal to queue thread
-		g_dp_queue_manager_tid = 0;
+		int status;
+		pthread_t tid;
+		tid = g_dp_queue_manager_tid;
 		CLIENT_MUTEX_LOCK(&g_dp_queue_manager_mutex);
+		g_dp_queue_manager_tid = 0;
 		pthread_cond_signal(&g_dp_queue_manager_cond);
 		CLIENT_MUTEX_UNLOCK(&g_dp_queue_manager_mutex);
-		pthread_cancel(g_dp_queue_manager_tid);
-		int status;
-		pthread_join(g_dp_queue_manager_tid, (void **)&status);
+		pthread_cancel(tid);
+		pthread_join(tid, (void **)&status);
 	}
 }

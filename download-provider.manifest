@@ -18,7 +18,7 @@
 			<smack request="wifi-direct::info" type="r" />
 			<smack request="connman::get" type="rw" />
 			<smack request="telephony_framework::api_ps_public" type="rw" />
-			<smack request="system::vconf" type="rwxat" />
+			<smack request="tizen::vconf::setting::admin" type="rwxat" />
 		</request>
 		<permit>
 			<smack permit="system::use_internet" type="w" />

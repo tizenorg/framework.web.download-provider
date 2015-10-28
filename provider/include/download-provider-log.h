@@ -30,7 +30,11 @@
 #define TRACE_DEBUG(...) do { } while(0)
 #endif
 #define TRACE_ERROR(format, ARG...) LOGE(format, ##ARG)
+#ifdef __NOT_VD__
 #define TRACE_STRERROR(format, ARG...) LOGE(format" [%s]", ##ARG, strerror(errno))
+#else
+#define TRACE_STRERROR(format, ARG...) LOGE(format" [%s]", ##ARG)
+#endif
 #define TRACE_INFO(format, ARG...) LOGI(format, ##ARG)
 #define TRACE_WARN(format, ARG...) LOGW(format, ##ARG)
 
@@ -53,7 +57,7 @@
 #else
 #define TRACE_DEBUG(...) do { } while(0)
 #define TRACE_ERROR(...) do { } while(0)
-#define TRACE_STRERROR(...) do { } while(0)
+#define TRACE_ERROR(...) do { } while(0)
 #define TRACE_INFO(...) do { } while(0)
 #define TRACE_WARN(...) do { } while(0)
 #define TRACE_SECURE_DEBUG(...) do { } while(0)

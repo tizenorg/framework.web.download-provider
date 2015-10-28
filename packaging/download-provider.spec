@@ -1,10 +1,10 @@
 %define _ux_define tizen2.3
 Name:       download-provider
 Summary:    Download the contents in background
-Version:    2.1.23
+Version:    2.1.26
 Release:    0
 Group:      Development/Libraries
-License:    Apache License, Version 2.0
+License:    Apache-2.0
 Source0:    %{name}-%{version}.tar.gz
 Requires(post): sys-assert
 Requires(post): libdevice-node
@@ -29,7 +29,7 @@ BuildRequires:  gettext-devel
 BuildRequires:  pkgconfig(libsystemd-daemon)
 BuildRequires:  pkgconfig(capi-network-wifi-direct)
 BuildRequires:  pkgconfig(libresourced)
-#BuildRequires:  model-build-features T30
+BuildRequires:  model-build-features 
 BuildRequires:  pkgconfig(storage)
 %if "%{?tizen_profile_name}" == "wearable"
 BuildRequires:  pkgconfig(security-server)
@@ -105,7 +105,11 @@ Description: Download the contents in background (development files)
 		-DIMAGE_DIR:PATH=%{_imagedir} \\\
 		-DLOCALE_DIR:PATH=%{_localedir} \\\
 		-DLICENSE_DIR:PATH=%{_licensedir} \\\
+		%if "%{?wifi_direct}" == "ON" \
+		-DSUPPORT_WIFI_DIRECT:BOOL=ON \\\
+		%else \
 		-DSUPPORT_WIFI_DIRECT:BOOL=OFF \\\
+		%endif \
 		%if "%{?sys_resource}" == "ON" \
 		-DSUPPORT_SYS_RESOURCE:BOOL=ON \\\
 		%else \
@@ -177,6 +181,7 @@ ln -s ../download-provider.socket %{buildroot}%{_libdir}/systemd/system/sockets.
 
 %post
 #make notify dir in post section for smack
+mkdir /opt/data/download-provider
 mkdir -p %{_notifydir}
 mkdir -p --mode=0700 %{_databasedir}
 chsmack -a 'download-provider' %{_databasedir}

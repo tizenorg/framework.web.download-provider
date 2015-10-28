@@ -36,9 +36,7 @@
 #include <download-provider-utils.h>
 
 #include <bundle.h> // for notification bundle
-#ifdef T30
 #include <bundle_internal.h>
-#endif
 #include <app_control.h>
 #include <app_control_internal.h>
 
@@ -224,7 +222,7 @@ static int __create_socket()
 	struct sockaddr_un clientaddr;
 
 	if ((sockfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-		TRACE_STRERROR("[CRITICAL] socket system error");
+		TRACE_ERROR("[CRITICAL] socket system error");
 		return -1;
 	}
 
@@ -237,7 +235,7 @@ static int __create_socket()
 		(struct sockaddr*)&clientaddr, sizeof(clientaddr)) < 0) {
 		close(sockfd);
 		if (errno == EACCES || errno == EPERM) {
-			TRACE_STRERROR("check permission");
+			TRACE_ERROR("check permission");
 			return -DP_ERROR_PERMISSION_DENIED;
 		}
 		return -1;
@@ -269,7 +267,7 @@ static int __bp_disconnect(const char *funcname)
 	if (g_dp_event_thread_id > 0 &&
 			pthread_kill(g_dp_event_thread_id, 0) != ESRCH) {
 		if (pthread_cancel(g_dp_event_thread_id) != 0) {
-			TRACE_STRERROR("pthread:%d", (int)g_dp_event_thread_id);
+			TRACE_ERROR("pthread:%d", (int)g_dp_event_thread_id);
 		}
 		g_dp_event_thread_id = 0;
 	}
@@ -281,7 +279,7 @@ static int __bp_disconnect(const char *funcname)
 static void *__dp_event_manager(void *arg)
 {
 	if (g_dp_client == NULL) {
-		TRACE_STRERROR("[CRITICAL] INTERFACE null");
+		TRACE_ERROR("[CRITICAL] INTERFACE null");
 		return 0;
 	}
 
@@ -291,7 +289,7 @@ static void *__dp_event_manager(void *arg)
 	TRACE_DEBUG("IPC ESTABILISH %s", notify_fifo);
 	g_dp_client->notify = open(notify_fifo, O_RDONLY, 0600);
 	if (g_dp_client->notify < 0) {
-		TRACE_STRERROR("[CRITICAL] failed to ESTABILISH IPC %s", notify_fifo);
+		TRACE_ERROR("[CRITICAL] failed to ESTABILISH IPC %s", notify_fifo);
 		g_dp_event_thread_id = 0;
 		CLIENT_MUTEX_LOCK(&g_function_mutex);
 		__clear_interface();
@@ -390,7 +388,7 @@ static int __dp_ipc_response(int sock, int download_id, short section,
 	if (ipc_info == NULL || ipc_info->section != section ||
 			ipc_info->property != property ||
 			(download_id >= 0 && ipc_info->id != download_id)) {
-		TRACE_STRERROR("socket read ipcinfo");
+		TRACE_ERROR("socket read ipcinfo");
 		free(ipc_info);
 		return DP_ERROR_IO_ERROR;
 	}
@@ -423,7 +421,7 @@ static int __connect_to_provider()
 		while(g_dp_client->channel < 0 && connect_retry-- > 0) {
 			int ret = __create_socket();
 			if (ret == -1) {
-				TRACE_STRERROR("failed to connect to provider(remains:%d)", connect_retry);
+				TRACE_ERROR("failed to connect to provider(remains:%d)", connect_retry);
 				struct timespec ts;
 				ts.tv_sec = 0;
 				ts.tv_nsec = 20000000;
@@ -432,16 +430,16 @@ static int __connect_to_provider()
 				struct timeval tv_timeo = { 1, 500000 }; // 1.5 second
 				g_dp_client->channel = ret;
 				if (setsockopt(g_dp_client->channel, SOL_SOCKET, SO_RCVTIMEO, &tv_timeo, sizeof(tv_timeo)) < 0) {
-					TRACE_STRERROR("[CRITICAL] setsockopt SO_RCVTIMEO");
+					TRACE_ERROR("[CRITICAL] setsockopt SO_RCVTIMEO");
 				}
 			} else {
 				errorcode = -ret;
-				TRACE_STRERROR("check error:%d", errorcode);
+				TRACE_ERROR("check error:%d", errorcode);
 				goto EXIT_CONNECT;
 			}
 		}
 		if (g_dp_client->channel < 0) {
-			TRACE_STRERROR("[CRITICAL] connect system error");
+			TRACE_ERROR("[CRITICAL] connect system error");
 			errorcode = DP_ERROR_IO_ERROR;
 			goto EXIT_CONNECT;
 		}
@@ -478,7 +476,7 @@ static int __connect_to_provider()
 		if (errorcode == DP_ERROR_NONE && g_dp_event_thread_id <= 0) {
 			if (pthread_create(&g_dp_event_thread_id, NULL,
 					__dp_event_manager, g_dp_client) != 0) {
-				TRACE_STRERROR("failed to create event-manager");
+				TRACE_ERROR("failed to create event-manager");
 				errorcode = DP_ERROR_IO_ERROR;
 			} else {
 				pthread_detach(g_dp_event_thread_id);
@@ -599,7 +597,7 @@ static int __dp_ipc_get_string(const int id, const unsigned property,
 			if (string_length > 0) {
 				char *recv_str = (char *)calloc((string_length + (size_t)1), sizeof(char));
 				if (recv_str == NULL) {
-					TRACE_STRERROR("check memory length:%d", string_length);
+					TRACE_ERROR("check memory length:%d", string_length);
 					errorcode = DP_ERROR_OUT_OF_MEMORY;
 					__dp_ipc_clear_garbage(sock, string_length);
 				} else {
@@ -1196,7 +1194,7 @@ int dp_interface_get_notification_bundle(const int id, const int type, void **bu
 	if (errorcode == DP_ERROR_NONE && extra_size > 0) {
 		unsigned char *recv_raws = (unsigned char *)calloc(extra_size, sizeof(unsigned char));
 		if (recv_raws == NULL) {
-			TRACE_STRERROR("sock:%d check memory length:%d", sock, extra_size);
+			TRACE_ERROR("sock:%d check memory length:%d", sock, extra_size);
 			errorcode = DP_ERROR_OUT_OF_MEMORY;
 			__dp_ipc_clear_garbage(sock, extra_size);
 		} else {
@@ -1300,7 +1298,7 @@ int dp_interface_get_notification_service_handle(const int id, const int type, v
 	if (errorcode == DP_ERROR_NONE && extra_size > 0) {
 		unsigned char *recv_raws = (unsigned char *)calloc(extra_size, sizeof(unsigned char));
 		if (recv_raws == NULL) {
-			TRACE_STRERROR("sock:%d check memory length:%d", sock, extra_size);
+			TRACE_ERROR("sock:%d check memory length:%d", sock, extra_size);
 			errorcode = DP_ERROR_OUT_OF_MEMORY;
 			__dp_ipc_clear_garbage(sock, extra_size);
 		} else {
@@ -1432,7 +1430,7 @@ int dp_interface_get_http_header_field(const int id, const char *field,
 				if (string_length > 0) {
 					char *recv_str = (char *)calloc((string_length + (size_t)1), sizeof(char));
 					if (recv_str == NULL) {
-						TRACE_STRERROR("check memory length:%d", string_length);
+						TRACE_ERROR("check memory length:%d", string_length);
 						errorcode = DP_ERROR_OUT_OF_MEMORY;
 						__dp_ipc_clear_garbage(sock, string_length);
 					} else {
@@ -1501,7 +1499,7 @@ int dp_interface_get_http_header_field_list(const int id, char ***fields,
 						char **recv_strings = NULL;
 						recv_strings = (char **)calloc(array_size, sizeof(char *));
 						if (recv_strings == NULL) {
-							TRACE_STRERROR("check memory size:%d", array_size);
+							TRACE_ERROR("check memory size:%d", array_size);
 							errorcode = DP_ERROR_OUT_OF_MEMORY;
 							*length = 0;
 						} else {
@@ -1513,7 +1511,7 @@ int dp_interface_get_http_header_field_list(const int id, char ***fields,
 								if (errorcode == DP_ERROR_NONE && string_length > 0) {
 									char *recv_str = (char *)calloc((string_length + (size_t)1), sizeof(char));
 									if (recv_str == NULL) {
-										TRACE_STRERROR("check memory length:%d", string_length * sizeof(char));
+										TRACE_ERROR("check memory length:%d", string_length * sizeof(char));
 										errorcode = DP_ERROR_OUT_OF_MEMORY;
 										break;
 									} else {

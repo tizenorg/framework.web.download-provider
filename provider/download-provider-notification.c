@@ -29,12 +29,9 @@
 #include "download-provider-utils.h"
 
 #include <bundle.h>
-#ifdef T30
 #include <bundle_internal.h>
-#include <notification_internal.h>
-#endif
 #include <notification.h>
-
+#include <notification_internal.h>
 #include <appsvc.h>
 
 #include <vconf.h>
@@ -177,6 +174,8 @@ char *__dp_noti_get_sender(char *url)
 		snprintf(sender, len + 1, "%s", temp);
 	} else {
 		sender = dp_strdup(temp);
+		if (sender == NULL)
+			return NULL;
 	}
 
 	// For credential URL

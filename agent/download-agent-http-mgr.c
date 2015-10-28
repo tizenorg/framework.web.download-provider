@@ -421,7 +421,7 @@ int __check_wait_for_auto_retry(http_info_t *http_info)
 	if (ret == ETIMEDOUT) {
 		DA_LOGI("Waiting is done by timeout");
 	} else if (ret != 0) {
-		DA_LOGE("fail to pthread_cond_waittime[%d][%s]",ret, strerror(ret));
+		DA_LOGE("fail to pthread_cond_waittime[%d]",ret);
 	} else {
 		DA_LOGI("Waiting is done by control");
 		DA_MUTEX_LOCK(&(http_info->mutex_state));
@@ -1256,11 +1256,11 @@ da_ret_t __handle_event_http_packet(http_raw_data_t *raw_data, da_info_t *da_inf
 					ret = send_client_update_progress_info(da_info);
 				}
 			} else {
-				DA_LOGE("Fail to call localtime[%s]",strerror(errno));
+				DA_LOGE("Fail to call localtime");
 				ret = send_client_update_progress_info(da_info);
 			}
 		} else {
-			DA_LOGE("Fail to call time[%s]",strerror(errno));
+			DA_LOGE("Fail to call time");
 			ret = send_client_update_progress_info(da_info);
 		}
 		break;
